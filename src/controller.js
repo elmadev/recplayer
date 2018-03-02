@@ -67,12 +67,14 @@ export default function(levName, imagesPath, elem, document) {
       canvase.setAttribute("tabindex", "0");
       canvase.addEventListener("keydown", listener, true);
 
+      var animationLoop;
+
       var loop =
         typeof requestAnimationFrame != "undefined"
           ? function(fn) {
               void (function go() {
                 fn();
-                requestAnimationFrame(go);
+                animationLoop = requestAnimationFrame(go);
               })();
             }
           : function(fn) {
@@ -203,6 +205,10 @@ export default function(levName, imagesPath, elem, document) {
                   })
             );
           });
+        },
+
+        removeAnimationLoop: function() {
+          window.cancelAnimationFrame(animationLoop);
         },
 
         loadLevel: function(levName, cont) {
