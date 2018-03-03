@@ -34,7 +34,6 @@ export default function(levName, imagesPath, elem, document) {
         mkCanv
       );
       var pl = player(levReader(lev), pllgr, mkCanv);
-      window.pl = pl; // just so it's accessible in the console
 
       function listener(e) {
         var kc = e.keyCode,
@@ -208,7 +207,7 @@ export default function(levName, imagesPath, elem, document) {
         },
 
         removeAnimationLoop: function() {
-          window.cancelAnimationFrame(animationLoop);
+          cancelAnimationFrame(animationLoop);
         },
 
         loadLevel: function(levName, cont) {
