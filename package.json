@@ -2,7 +2,7 @@
   "name": "recplayer",
   "version": "1.0.0",
   "description": "ES6 port of recplay",
-  "main": "player.js",
+  "main": "src/controller.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
