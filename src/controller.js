@@ -195,14 +195,16 @@ export default function(levName, imagesPath, elem, document) {
       cont({
         loadReplay: function(recName, shirts) {
           get(recName, function(rec) {
-            pl.addReplay(
-              recReader(rec),
-              !shirts
-                ? []
-                : shirts.map(function(s) {
-                    return s == null ? null : pllgr.lazy(s);
-                  })
-            );
+            if (rec) {
+              pl.addReplay(
+                recReader(rec),
+                !shirts
+                  ? []
+                  : shirts.map(function(s) {
+                      return s == null ? null : pllgr.lazy(s);
+                    })
+              );
+            }
           });
         },
 
