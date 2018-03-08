@@ -4,7 +4,7 @@ import get from "./get";
 import lgr from "./lgr";
 import player from "./player";
 
-export default function(levName, imagesPath, elem, document) {
+export default function(levName, imagesPath, elem, document, onFrameUpdate) {
   var createElement =
     "createElementNS" in document
       ? function(tag) {
@@ -65,26 +65,25 @@ export default function(levName, imagesPath, elem, document) {
 
       canvase.setAttribute("tabindex", "0");
       canvase.addEventListener("keydown", listener, true);
-
+      var play = true;
       var animationLoop;
-
       var loop =
         typeof requestAnimationFrame != "undefined"
           ? function(fn) {
               void (function go() {
                 fn();
-                animationLoop = requestAnimationFrame(go);
+                play && requestAnimationFrame(go);
               })();
             }
           : function(fn) {
               var fps = 30;
-              setInterval(fn, 1000 / fps);
+              animationLoop = setInterval(fn, 1000 / fps);
             };
 
       function draw() {
-        pl.draw(canvas, 0, 0, canvase.width, canvase.height, true);
+        var status = pl.draw(canvas, 0, 0, canvase.width, canvase.height, true);
+        status && onFrameUpdate(status.currentFrame, status.maxFrames);
       }
-
       loop(draw);
 
       function rect() {
@@ -209,7 +208,8 @@ export default function(levName, imagesPath, elem, document) {
         },
 
         removeAnimationLoop: function() {
-          cancelAnimationFrame(animationLoop);
+          play = false;
+          animationLoop && window.clearInterval(animationLoop);
         },
 
         loadLevel: function(levName, cont) {

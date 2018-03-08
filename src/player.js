@@ -336,7 +336,9 @@ export default function(levRd, lgr, makeCanvas) {
       t = Math.floor(t / 100);
       var sec = pad(2, t % 60);
       t = Math.floor(t / 60);
-      canv.fillText(t + ":" + sec + "." + csec, 10, 12 * 2);
+      var timestamp = t + ":" + sec + ":" + csec;
+
+      canv.fillText(timestamp, 10, 12 * 2);
       canv.fillText(
         replays[0].objRn.applesTaken(frame) +
           "/" +
@@ -349,6 +351,13 @@ export default function(levRd, lgr, makeCanvas) {
     } else drawViewport(getViewport(0), canv, x, y, w, h, frame, null);
     invalidate = false;
     canv.restore();
+    return (
+      (playing || dragging) &&
+      replays.length > 0 && {
+        currentFrame: frame,
+        maxFrames: replays[0].frameCount - 1
+      }
+    );
   }
 
   return {
@@ -375,8 +384,7 @@ export default function(levRd, lgr, makeCanvas) {
 
       if (onlyMaybe && lastFrame == curFrame && !invalidate) return;
       lastFrame = curFrame;
-
-      drawFrame(canv, x, y, w, h, lastFrame);
+      return drawFrame(canv, x, y, w, h, lastFrame);
     },
 
     // shirts should be created by lgr.lazy
