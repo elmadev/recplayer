@@ -16,7 +16,7 @@ function pad(n, s) {
   return s;
 }
 
-export default function(levRd, lgr, makeCanvas) {
+export default function(levRd, lgr, makeCanvas, autoPlay) {
   var replays, levRn;
   var lastFrame;
   var refFrame, refTime;
@@ -42,6 +42,10 @@ export default function(levRd, lgr, makeCanvas) {
 
   reset();
 
+  lgr.afterLoad(function() {
+    invalidate = true;
+  });
+
   function reset() {
     replays = [];
     levRn = levRender(levRd, lgr);
@@ -55,7 +59,7 @@ export default function(levRd, lgr, makeCanvas) {
 
     focus = true;
 
-    playing = true;
+    playing = autoPlay;
 
     startX = 0;
     startY = 0;

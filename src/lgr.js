@@ -121,6 +121,7 @@ export default function(path, mkImage, mkCanv) {
 
   var numLoading = 0;
   var listeners = [];
+  var afterLoad;
 
   function allLoaded() {
     var ls = listeners;
@@ -128,6 +129,7 @@ export default function(path, mkImage, mkCanv) {
     ls.forEach(function(f) {
       f();
     });
+    afterLoad && afterLoad();
   }
 
   // will call the given function the next time there are no images loading
@@ -136,6 +138,10 @@ export default function(path, mkImage, mkCanv) {
   r.whenLoaded = function(l) {
     if (numLoading > 0) listeners.push(l);
     else l();
+  };
+
+  r.afterLoad = function(f) {
+    afterLoad = f;
   };
 
   function lazy(path, cont) {

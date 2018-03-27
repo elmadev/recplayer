@@ -4,7 +4,14 @@ import get from "./get";
 import lgr from "./lgr";
 import player from "./player";
 
-export default function(levName, imagesPath, elem, document, onFrameUpdate) {
+export default function(
+  levName,
+  imagesPath,
+  elem,
+  document,
+  onFrameUpdate,
+  autoPlay
+) {
   var createElement =
     "createElementNS" in document
       ? function(tag) {
@@ -33,7 +40,7 @@ export default function(levName, imagesPath, elem, document, onFrameUpdate) {
         },
         mkCanv
       );
-      var pl = player(levReader(lev), pllgr, mkCanv);
+      var pl = player(levReader(lev), pllgr, mkCanv, autoPlay);
 
       function listener(e) {
         var kc = e.keyCode,
