@@ -164,7 +164,7 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
   function dragPosition(x, y, w, h) {
     var vp =
       focus && replays.length > 0
-        ? getViewport(Math.floor(y / h * replays[0].subs.length))
+        ? getViewport(Math.floor((y / h) * replays[0].subs.length))
         : getViewport(0);
 
     var firstOx = vp.offsX,
@@ -189,7 +189,7 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
     function update(cx, cy) {
       dragging = true;
       if (replays.length == 0) return;
-      lastFrame = replays[0].frameCount * cx / w;
+      lastFrame = (replays[0].frameCount * cx) / w;
       if (lastFrame < 0) lastFrame = 0;
       if (lastFrame >= frameCount) lastFrame = frameCount - 1;
       setRef();
@@ -333,7 +333,9 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
           frame,
           replays[0].subs[z]
         );
-      var t = Math.floor(Math.min(frame, replays[0].frameCount - 1) * 100 / 30);
+      var t = Math.floor(
+        (Math.min(frame, replays[0].frameCount - 1) * 100) / 30
+      );
       canv.font = "14px monospace";
       canv.fillStyle = "yellow";
       var csec = pad(2, t % 100);
@@ -351,17 +353,18 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
         12 * 3
       );
       //				canv.fillText(arrow(replays[0].objRn.gravity(frame, 0)), 10, 12*4);
-      canv.fillRect(w * frame / replays[0].frameCount - 2.5, 0, 5, 12);
+      canv.fillRect((w * frame) / replays[0].frameCount - 2.5, 0, 5, 12);
     } else drawViewport(getViewport(0), canv, x, y, w, h, frame, null);
-    invalidate = false;
+
     canv.restore();
-    return (
-      (playing || dragging) &&
-      replays.length > 0 && {
+
+    if ((playing || dragging || invalidate) && replays.length > 0) {
+      invalidate = false;
+      return {
         currentFrame: frame,
         maxFrames: replays[0].frameCount - 1
-      }
-    );
+      };
+    }
   }
 
   return {
@@ -374,7 +377,7 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
 
     draw: function(canv, x, y, w, h, onlyMaybe) {
       var curFrame =
-        refFrame + playing * (Date.now() - refTime) * speed * 30 / 1000;
+        refFrame + (playing * (Date.now() - refTime) * speed * 30) / 1000;
       if (replays.length > 0) {
         while (frameCount && curFrame >= frameCount) {
           curFrame = refFrame = curFrame - frameCount;

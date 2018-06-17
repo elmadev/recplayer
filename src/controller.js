@@ -186,7 +186,7 @@ export default function(
         var r = rect();
         var delta =
           e.deltaMode == WheelEvent.DOM_DELTA_LINE
-            ? 53 / 3 * e.deltaY
+            ? (53 / 3) * e.deltaY
             : e.deltaY;
         pl.inputWheel(
           e.clientX - r.left,
@@ -230,6 +230,10 @@ export default function(
           canvase.width = wd;
           canvase.height = ht;
           pl.invalidate();
+        },
+
+        setFrame: function(frame) {
+          pl.setFrame(frame);
         },
 
         player: function() {
