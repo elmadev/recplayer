@@ -1,6 +1,6 @@
 {
   "name": "recplayer",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "ES6 port of recplay",
   "main": "src/controller.js",
   "scripts": {
