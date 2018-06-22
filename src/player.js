@@ -333,6 +333,7 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
           frame,
           replays[0].subs[z]
         );
+      /*
       var t = Math.floor(
         (Math.min(frame, replays[0].frameCount - 1) * 100) / 30
       );
@@ -352,8 +353,9 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
         10,
         12 * 3
       );
-      //				canv.fillText(arrow(replays[0].objRn.gravity(frame, 0)), 10, 12*4);
+      canv.fillText(arrow(replays[0].objRn.gravity(frame, 0)), 10, 12*4);
       canv.fillRect((w * frame) / replays[0].frameCount - 2.5, 0, 5, 12);
+      */
     } else drawViewport(getViewport(0), canv, x, y, w, h, frame, null);
 
     canv.restore();
