@@ -40,6 +40,8 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
   var optPictures = true;
   var optCustomBackgroundSky = true;
 
+  var bounds = null;
+
   reset();
 
   lgr.afterLoad(function() {
@@ -77,6 +79,8 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
     zoom = 0;
     speed = 1;
 
+    bounds = null;
+
     defaultObjRn = objRender(levRd);
   }
 
@@ -93,7 +97,8 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
         offsY: 0,
         // hack! Firefox seems to perform a lot better without the cache
         // suspect it has to do with the offscreen antialiasing it's doing
-        levRn: isMozilla ? levRn.draw : levRn.cached(4, makeCanvas)
+        levRn: isMozilla ? levRn.draw : levRn.cached(4, makeCanvas),
+        scaleFac: 1
       };
     return viewports[n];
   }
@@ -174,8 +179,8 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
       update: function(cx, cy) {
         dragging = true;
         invalidate = true;
-        vp.offsX = firstOx - (cx - x) / (48 * getScale());
-        vp.offsY = firstOy - (cy - y) / (48 * getScale());
+        vp.offsX = firstOx - (cx - x) / (vp.scaleFac * 48 * getScale());
+        vp.offsY = firstOy - (cy - y) / (vp.scaleFac * 48 * getScale());
       },
 
       end: function() {}
@@ -208,10 +213,32 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
   }
 
   function changeFocus() {
+    focus = true;
+    bounds = null;
     invalidate = true;
     if (replays.length > 0) replays.unshift(replays.pop());
+    resetViewports();
     for (var z = 0; z < viewports.length; z++)
       viewports[z].offsX = viewports[z].offsY = 0;
+  }
+
+  function unfocus() {
+		focus = false;
+		invalidate = true;
+		resetViewports();
+	}
+
+  function fitLev() {
+		bounds = levRn.bounds();
+		setScale(1);
+		invalidate = true;
+		resetViewports();
+	}
+
+  function resetViewports() {
+    for (var z = 0; z < viewports.length; z++) {
+      viewports[z].offsX = viewports[z].offsY = 0;
+    }
   }
 
   function playPause() {
@@ -244,16 +271,24 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
 
     var centreX = vp.offsX,
       centreY = vp.offsY;
-    if (topRec) {
+    if (bounds != null) {
+      centreX += (bounds.maxX + bounds.minX)/2;
+      centreY += (bounds.maxY + bounds.minY)/2;
+      var bw = bounds.maxX - bounds.minX;
+      var bh = bounds.maxY - bounds.minY;
+      vp.scaleFac = Math.min(w/bw, h/bh)/48;
+    } else if (topRec) {
       var lf = Math.min(frame, topRec.rd.frameCount() - 1);
       centreX += topRec.rn.bikeXi(lf);
       centreY -= topRec.rn.bikeYi(lf);
+      vp.scaleFac = 1;
     } else {
       centreX += startX;
       centreY += startY;
+      vp.scaleFac = 1;
     }
 
-    var escale = 48 * getScale();
+    var escale = vp.scaleFac * 48 * getScale();
     var ex = eround(centreX - w / escale / 2),
       ey = eround(centreY - h / escale / 2);
     var ew = eround(w / escale),
@@ -422,6 +457,8 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
     },
 
     changeFocus: changeFocus,
+    unfocus: unfocus,
+    fitLev: fitLev,
 
     setSpeed: setSpeed,
     setScale: setScale,
@@ -471,6 +508,9 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
           break;
         case "backspace":
           setSpeed(signum(speed));
+          break;
+        case "f":
+          fitLev();
           break;
         case "w":
           setZoom(zoom + 1);
