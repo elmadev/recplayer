@@ -1,6 +1,7 @@
 import levRender from "./levRender";
 import recRender from "./recRender";
 import objRender from "./objRender";
+import bikeRender from "./bikeRender";
 
 var isMozilla =
   typeof navigator != "undefined" &&
@@ -41,6 +42,8 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
   var optCustomBackgroundSky = true;
 
   var bounds = null;
+
+  var showStartPos = false;
 
   reset();
 
@@ -235,6 +238,10 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
 		resetViewports();
 	}
 
+  function startPos() {
+    showStartPos = true;
+  }
+
   function resetViewports() {
     for (var z = 0; z < viewports.length; z++) {
       viewports[z].offsX = viewports[z].offsY = 0;
@@ -296,6 +303,9 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
 
     levRn.drawSky(canv, ex, ey, ew, eh, escale);
     vp.levRn(canv, ex, ey, ew, eh, escale);
+    if (replays.length === 0 && showStartPos) {
+      bikeRender(canv, lgr, null, 0, ex, ey, escale, startX + 0.84, Math.abs(startY - 0.6));
+    }
     if (focus && replays.length > 0)
       replays[0].objRn.draw(
         canv,
@@ -459,6 +469,7 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
     changeFocus: changeFocus,
     unfocus: unfocus,
     fitLev: fitLev,
+    startPos: startPos,
 
     setSpeed: setSpeed,
     setScale: setScale,
