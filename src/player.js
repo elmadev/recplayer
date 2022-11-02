@@ -100,7 +100,9 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
         offsY: 0,
         // hack! Firefox seems to perform a lot better without the cache
         // suspect it has to do with the offscreen antialiasing it's doing
-        levRn: isMozilla ? levRn.draw : levRn.cached(4, makeCanvas),
+        // levRn: isMozilla ? levRn.draw : levRn.cached(4, makeCanvas),
+        // this "hack" caused major memory leak
+        levRn: levRn.cached(4, makeCanvas),
         scaleFac: 1
       };
     return viewports[n];
