@@ -239,6 +239,9 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
 		invalidate = true;
 		resetViewports();
 	}
+  function appleTimes() {
+    return replays[0].objRn.appleTimes();
+  }
 
   function startPos() {
     showStartPos = true;
@@ -471,6 +474,7 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
     changeFocus: changeFocus,
     unfocus: unfocus,
     fitLev: fitLev,
+    appleTimes: appleTimes,
     startPos: startPos,
 
     setSpeed: setSpeed,

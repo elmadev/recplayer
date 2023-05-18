@@ -78,6 +78,13 @@ export default function objRender(levReader, recReader) {
     },
 
     gravity: function(frame, rec) {
+    appleTimes: function () {
+      return applesTaken.map((a, i) => ({
+        apple: i + 1,
+        frame: a[0],
+      }));
+    },
+
       var gravC = gravityChanges[rec];
       if (gravC.length == 0)
         // returns empty string if gravity is default for whole rec
