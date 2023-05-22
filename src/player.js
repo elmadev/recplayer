@@ -240,6 +240,9 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
 		resetViewports();
 	}
   function appleTimes() {
+    if (!replays[0]) {
+      return [];
+    }
     return replays[0].objRn.appleTimes();
   }
 
