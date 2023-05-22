@@ -309,7 +309,7 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
     levRn.drawSky(canv, ex, ey, ew, eh, escale);
     vp.levRn(canv, ex, ey, ew, eh, escale);
     if (replays.length === 0 && showStartPos) {
-      bikeRender(canv, lgr, null, 0, ex, ey, escale, startX + 0.84, Math.abs(startY - 0.6));
+      bikeRender(canv, lgr, null, 0, ex, ey, escale, startX + 0.84, -startY + 0.6);
     }
     if (focus && replays.length > 0)
       replays[0].objRn.draw(
