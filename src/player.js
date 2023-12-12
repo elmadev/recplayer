@@ -517,16 +517,16 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
 
     inputKey: function(key) {
       switch (key) {
-        case "space":
+        case " ":
           playPause();
           break;
-        case "[":
+        case "-":
           setSpeed(speed * 0.8); // 0.8^n is actually representable
           break;
-        case "]":
+        case "+":
           setSpeed(speed / 0.8);
           break;
-        case "backspace":
+        case "Backspace":
           setSpeed(signum(speed));
           break;
         case "f":
@@ -554,11 +554,11 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
           optGrass = optPictures = optCustomBackgroundSky = true;
           updateLevOpts();
           break;
-        case "right":
+        case "ArrowRight":
           lastFrame += 30 * 2.5 * speed;
           setRef();
           break;
-        case "left":
+        case "ArrowLeft":
           lastFrame -= 30 * 2.5 * speed;
           setRef();
           break;
