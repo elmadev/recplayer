@@ -43,31 +43,7 @@ export default function(
       var pl = player(levReader(lev), pllgr, mkCanv, autoPlay);
 
       function listener(e) {
-        var kc = e.keyCode,
-          result;
-        if (
-          !e.ctrlKey &&
-          !e.metaKey &&
-          !e.altKey &&
-          kc >= "A".charCodeAt(0) &&
-          kc <= "Z".charCodeAt(0)
-        )
-          result = String.fromCharCode(kc + !e.shiftKey * 32);
-        else
-          result = {
-            219: "[",
-            221: "]",
-            8: "backspace",
-            32: "space",
-            37: "left",
-            38: "up",
-            39: "right",
-            40: "down"
-          }[kc];
-        if (result !== undefined) {
-          console.log(result);
-          if (pl.inputKey(result)) e.preventDefault();
-        }
+        if (pl.inputKey(e.key)) e.preventDefault();
       }
 
       canvase.setAttribute("tabindex", "0");
