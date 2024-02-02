@@ -323,7 +323,8 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
         ey,
         ew,
         eh,
-        escale
+        escale,
+        optGrass // showGravity
       );
     else defaultObjRn.draw(canv, lgr, frame, ex, ey, ew, eh, escale);
     for (var z = replays.length - 1; z >= 0; z--) {
@@ -338,7 +339,8 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
             Math.min(frame, rec.rd.frameCount() - 1),
             ex,
             ey,
-            escale
+            escale,
+            optGrass // showGravity
           );
       }
     }

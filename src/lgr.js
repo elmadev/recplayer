@@ -222,11 +222,16 @@ export default function(path, mkImage, mkCanv) {
         }
       },
 
-      frame: function(canv, num, of) {
+      frame: function (canv, num, of, g, showGravity) {
         if (requested()) {
           num = Math.floor(num);
           var wdPer = img.width / of;
           canv.drawImage(img, num * wdPer, 0, wdPer, img.height, 0, 0, 1, 1);
+          // Draw gravity arrows
+          if (g && showGravity) {
+            canv.font = "1px Courier";
+            canv.fillText(arrow(g), 0.2, 0.8);
+          }
         } else {
           canv.save();
           canv.translate(0.5, 0.5);
@@ -239,7 +244,15 @@ export default function(path, mkImage, mkCanv) {
     });
   }
 
-  imgs.forEach(function(i) {
+  function arrow(g) {
+    if (g == 1) return "\u2191";
+    if (g == 2) return "\u2193";
+    if (g == 3) return "\u2190";
+    if (g == 4) return "\u2192";
+    return "";
+  }
+
+  imgs.forEach(function (i) {
     r[i] = lazy_(path + "/" + i + ".png", i);
   });
 
