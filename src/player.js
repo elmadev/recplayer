@@ -38,6 +38,7 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
 
   // levRender options; makes sense to persist these
   var optGrass = true;
+  var optGravityArrows = true;
   var optPictures = true;
   var optCustomBackgroundSky = true;
 
@@ -323,7 +324,8 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
         ey,
         ew,
         eh,
-        escale
+        escale,
+        optGravityArrows // showGravity
       );
     else defaultObjRn.draw(canv, lgr, frame, ex, ey, ew, eh, escale);
     for (var z = replays.length - 1; z >= 0; z--) {
@@ -338,7 +340,8 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
             Math.min(frame, rec.rd.frameCount() - 1),
             ex,
             ey,
-            escale
+            escale,
+            optGravityArrows // showGravity
           );
       }
     }
@@ -496,6 +499,7 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
 
     setLevOpts: function(o) {
       if ("grass" in o) optGrass = o.grass;
+      if ("arrows" in o) optGravityArrows = o.arrows;
       if ("pictures" in o) optPictures = o.pictures;
       if ("customBackgroundSky" in o)
         optCustomBackgroundSky = o.customBackgroundSky;
@@ -549,6 +553,9 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
         case "g":
           optGrass = !optGrass;
           updateLevOpts();
+          break;
+        case "a":
+          optGravityArrows = !optGravityArrows;
           break;
         case "G":
           optGrass = optPictures = optCustomBackgroundSky = true;

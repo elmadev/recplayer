@@ -93,7 +93,7 @@ export default function objRender(levReader, recReader) {
       return x ? gravC[x - 1][1] : "down";
     },
 
-    draw: function(canv, lgr, frame, x, y, w, h, scale) {
+    draw: function (canv, lgr, frame, x, y, w, h, scale, showGravity) {
       canv.save();
       canv.scale(scale, scale);
       canv.translate(-x, -y);
@@ -106,8 +106,10 @@ export default function objRender(levReader, recReader) {
         switch (objs[z].type) {
           case "ap":
             if ("taken" in objs[z] && objs[z].taken <= frame) break;
-            if (objs[z].anim) lgr.qfood2.frame(canv, frame % 51, 51);
-            else lgr.qfood1.frame(canv, frame % 34, 34);
+            if (objs[z].anim)
+              lgr.qfood2.frame(canv, frame % 51, 51, objs[z].grav, showGravity);
+            else
+              lgr.qfood1.frame(canv, frame % 34, 34, objs[z].grav, showGravity);
             break;
           case "fl":
             lgr.qexit.frame(canv, frame % 50, 50);
