@@ -327,7 +327,18 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
         escale,
         optGravityArrows // showGravity
       );
-    else defaultObjRn.draw(canv, lgr, frame, ex, ey, ew, eh, escale);
+    else
+      defaultObjRn.draw(
+        canv,
+        lgr,
+        frame,
+        ex,
+        ey,
+        ew,
+        eh,
+        escale,
+        optGravityArrows
+      );
     for (var z = replays.length - 1; z >= 0; z--) {
       for (var zx = replays[z].subs.length - 1; zx >= 0; zx--) {
         var rec = replays[z].subs[zx];
