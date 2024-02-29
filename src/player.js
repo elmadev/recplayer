@@ -488,6 +488,12 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
       invalidate = true;
     },
 
+    clearReplays: function() {
+      lastFrame = 0;
+      setRef();
+      replay.subs = [];
+    },
+
     changeFocus: changeFocus,
     unfocus: unfocus,
     fitLev: fitLev,

@@ -190,6 +190,40 @@ export default function(
           });
         },
 
+        loadReplays: function(recNames, shirts) {
+          let loadedShirt = !shirts
+            ? []
+            : shirts.map(function(s) {
+              return s == null ? null : pllgr.lazy(s);
+            });
+
+          recNames.map(function(r) {
+            return get(r, function(rec) {
+              pl.addReplay(recReader(rec), [loadedShirt[0]]);
+              loadedShirt = loadedShirt.slice(1);
+            });
+          });
+        },
+
+        changeReplays: function(recNames, shirts) {
+          let loadedShirt = !shirts
+            ? []
+            : shirts.map(function(s) {
+              return s == null ? null : pllgr.lazy(s);
+            });
+
+            pl.clearReplays();
+
+            recNames.map(function(r) {
+              return get(r, function(rec) {
+                pl.addReplay(recReader(rec), [loadedShirt[0]]);
+                loadedShirt = loadedShirt.slice(1);
+              });
+            });
+
+          pl.changeReplays(readRecs, loadedShirt);
+        },
+
         removeAnimationLoop: function() {
           play = false;
           animationLoop && window.clearInterval(animationLoop);
