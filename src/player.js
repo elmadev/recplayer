@@ -464,12 +464,8 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
     },
 
     // shirts should be created by lgr.lazy
-    addReplay: function(recRd, shirts) {
-      if (replays.length == 0) {
-        lastFrame = 0;
-        setRef();
-      }
-      var replay = { objRn: objRender(levRd, recRd), subs: [] };
+    addReplay: function(recRd, recName, shirts) {
+      var replay = { recName: recName, objRn: objRender(levRd, recRd), subs: [] };
       while (recRd) {
         replay.subs.push({
           rd: recRd,
@@ -485,7 +481,18 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
       }, 0);
       replays.push(replay);
       frameCount = calcFrameCount();
-      invalidate = true;
+    },
+
+    removeReplay: function(recName) {
+      replays = replays.filter(function(r) {
+        return r.recName !== recName;
+      });
+    },
+
+    loadedRecs: function() {
+      return replays.map(function(r) {
+        return r.recName
+      });
     },
 
     changeFocus: changeFocus,
