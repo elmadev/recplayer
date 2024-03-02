@@ -199,29 +199,43 @@ export default function(
 
           recNames.map(function(r) {
             return get(r, function(rec) {
-              pl.addReplay(recReader(rec), [loadedShirt[0]]);
+              pl.addReplay(recReader(rec), r, [loadedShirt[0]]);
               loadedShirt = loadedShirt.slice(1);
             });
           });
         },
 
         changeReplays: function(recNames, shirts) {
-          let loadedShirt = !shirts
-            ? []
-            : shirts.map(function(s) {
+            const loadedRecs = pl.loadedRecs();
+
+            loadedRecs.forEach(function(r) {
+              if (!recNames.includes(r)) {
+                pl.removeReplay(r);
+              }
+            });
+
+            const newRecs = [];
+            const newShirts = [];
+
+            recNames.forEach(function(r, i) {
+              if (loadedRecs.includes(r)) {
+                return;
+              }
+
+              newRecs.push(r);
+              newShirts.push(shirts[i]);
+            });
+
+            let loadedShirt = newShirts.map(function(s) {
               return s == null ? null : pllgr.lazy(s);
             });
 
-            pl.clearReplays();
-
-            recNames.map(function(r) {
+            newRecs.map(function(r) {
               return get(r, function(rec) {
-                pl.addReplay(recReader(rec), [loadedShirt[0]]);
+                pl.addReplay(recReader(rec), r, [loadedShirt[0]]);
                 loadedShirt = loadedShirt.slice(1);
               });
             });
-
-          pl.changeReplays(readRecs, loadedShirt);
         },
 
         removeAnimationLoop: function() {
