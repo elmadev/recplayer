@@ -1,26 +1,36 @@
 import binReader from "./binReader";
 
-var ticker = (function() {
-  var n = 0;
-  return function(m) {
-    n += m;
-    return n - m;
-  };
-})();
-
-var offsType = ticker(5);
-ticker(2);
-var offsIdent = ticker(4);
-var offsIntegrities = ticker(4 * 8);
-var offsDesc = ticker(51);
-var offsLgr = ticker(16);
-var offsGround = ticker(10);
-var offsSky = ticker(10);
-var offsPolyCount = ticker(8);
-var offsPolys = ticker(0);
-
 export default function levReader(data) {
   var br = binReader(data);
+
+  var ticker = (function() {
+    var n = 0;
+    return function(m) {
+      n += m;
+      return n - m;
+    };
+  })();
+
+  var offsType = ticker(5);
+  function levVersion() {
+    br.seek(offsType);
+    return br.seq(5);
+  }
+  var elma = levVersion() == "POT14";
+  if (elma) ticker(2);
+  var offsIdent = ticker(4);
+  var offsIntegrities = ticker(4 * 8);
+  var descLength = elma ? 51 : 15;
+  var offsDesc = ticker(descLength);
+  if (elma) {
+    var offsLgr = ticker(16);
+    var offsGround = ticker(10);
+    var offsSky = ticker(10);
+  }
+  else ticker(44); // Across lev
+
+  var offsPolyCount = ticker(8);
+  var offsPolys = ticker(0);
 
   function polyCount() {
     br.seek(offsPolyCount);
@@ -33,32 +43,33 @@ export default function levReader(data) {
   }
 
   function picCount() {
-    br.seek(offsPicCount);
-    return Math.floor(br.binFloat64le());
+    if (elma) {
+      br.seek(offsPicCount);
+      return Math.floor(br.binFloat64le());
+    } else return 0;
   }
 
   var offsObjCount = (function() {
     var pc = polyCount();
     br.seek(offsPolys);
     for (var x = 0; x < pc; x++) {
-      br.skip(4); // grass
+      if (elma) br.skip(4); // grass
       br.skip(br.word32le() * (8 + 8));
     }
     return br.pos();
   })();
   var offsObjs = offsObjCount + 8;
-  var offsPicCount = (function() {
+  var offsPicCount = elma ? (function() {
     br.seek(offsObjCount);
     return offsObjs + Math.floor(br.binFloat64le()) * (8 + 8 + (4 + 4 + 4));
-  })();
+  })() : 0;
   var offsPics = offsPicCount + 8;
 
   var obj, pic; // initialised in the object literal :\
 
   return (window.lrd = {
     rightType: function() {
-      br.seek(offsType);
-      return br.seq(5) == "POT14";
+      return ["POT14", "POT06"].indexOf(levVersion()) >= 0;
     },
 
     ident: function() {
@@ -75,22 +86,28 @@ export default function levReader(data) {
 
     desc: function() {
       br.seek(offsDesc);
-      return br.string(51);
+      return br.string(descLength);
     },
 
     lgr: function() {
-      br.seek(offsLgr);
-      return br.string(16);
+      if (elma) {
+        br.seek(offsLgr);
+        return br.string(16);
+      } else return "default";
     },
 
     ground: function() {
-      br.seek(offsGround);
-      return br.string(10);
+      if (elma) {
+        br.seek(offsGround);
+        return br.string(10);
+      } else return "ground";
     },
 
     sky: function() {
-      br.seek(offsSky);
-      return br.string(10);
+      if (elma) {
+        br.seek(offsSky);
+        return br.string(10);
+      } else return "sky";
     },
 
     polyCount: polyCount,
@@ -109,7 +126,7 @@ export default function levReader(data) {
       var count = polyCount();
       br.seek(offsPolys);
       for (var x = 0; x < count; x++) {
-        var grass = br.word32le(),
+        var grass = elma ? br.word32le() : 0,
           vcount = br.word32le(),
           pos = br.pos();
         void (function(grass, vcount, pos) {
@@ -127,12 +144,12 @@ export default function levReader(data) {
 
     obj: (obj = function(n, onFlower, onApple, onKiller, onStart) {
       // onError? maybe
-      br.seek(offsObjs + n * (8 + 8 + (4 + 4 + 4)));
+      br.seek(offsObjs + n * (8 + 8 + (elma ? (4 + 4 + 4) : 4)));
       var vx = br.binFloat64le(),
         vy = br.binFloat64le();
       var obj = br.word32le(),
-        grav = br.word32le(),
-        anim = br.word32le();
+        grav = elma ? br.word32le() : 0,
+        anim = elma ? br.word32le() : 0;
       switch (obj) {
         case 1:
           return onFlower(vx, vy);
