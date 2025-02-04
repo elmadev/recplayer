@@ -463,7 +463,7 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
       return drawFrame(canv, x, y, w, h, lastFrame);
     },
 
-    // shirts should be created by lgr.lazy
+    // shirts should be created by lgr.img_lazy
     addReplay: function(recRd, recName, shirts) {
       var replay = { recName: recName, objRn: objRender(levRd, recRd), subs: [] };
       while (recRd) {

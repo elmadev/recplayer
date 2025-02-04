@@ -1,3 +1,6 @@
+import { LGR, PictureType, Transparency, Clip } from 'elmajs'
+import { PCX } from './pcx'
+
 var imgs = [
   "bike",
   "ground",
@@ -72,6 +75,19 @@ var picts = [
   ["susp", "pict", 380, "u"]
 ];
 
+const PicType = {
+  [PictureType.Normal]: "pict",
+  [PictureType.Texture]: "text",
+  [PictureType.Mask]: "mask",
+};
+
+const PicClip = {
+  [Clip.Unclipped]: "u",
+  [Clip.Ground]: "g",
+  [Clip.Sky]: "s",
+};
+
+
 function loading(canv) {
   canv.save();
   canv.lineWidth = 1 / 20;
@@ -86,27 +102,30 @@ function loading(canv) {
   canv.restore();
 }
 
-function borders(mkCanv, img, up) {
+function borders_legacy(mkCanv, img, up) {
+  var data;
   var canve = mkCanv(img.width, img.height);
   var canv = canve.getContext("2d");
   img.drawAt(canv);
-  var data;
   try {
+    // throws security error in Firefox and Chrome
     data = canv.getImageData(0, 0, img.width, img.height).data;
   } catch (e) {
     console.log(e);
   }
   var o = [];
-  if (data)
+  if (data){
+    // Even if no error is thrown, this doesn't seem to quite work properly
     for (var x = 0; x < img.width; x++) {
       for (
         var y = 0;
-        y < img.height && data[4 * (y * img.width + x) + 3] == 0;
+        (y < img.height) && (data[4 * (y * img.width + x) + 3] === 0);
         y++
       );
       o.push(y);
     }
-  else {
+  } else {
+    // Fallback is used on Firefox and Chrome
     var diff = img.height - 41;
     var from = img.height / 2 + (up ? 1 : -1) * diff / 2;
     var to = img.height / 2 + (up ? -1 : 1) * diff / 2;
@@ -116,8 +135,23 @@ function borders(mkCanv, img, up) {
   return o;
 }
 
-export default function(path, mkImage, mkCanv) {
-  var r = { _ident: {}, picts: {}, lazy: lazy };
+function borders(imgData) {
+  let {data, width, height} = imgData
+  let heightmap = [];
+  for (let j = 0; j < width; j++) {
+    let i;
+    for (
+      i = 0;
+      (i < height) && (data[4 * (i * width + j) + 3] === 0);
+      i++
+    );
+    heightmap.push(i);
+  }
+  return heightmap;
+}
+
+export default function(lgrFile, path, mkImage, mkCanv) {
+  var r = { _ident: {}, picts: {}, img_lazy: img_lazy };
 
   var numLoading = 0;
   var listeners = [];
@@ -144,11 +178,134 @@ export default function(path, mkImage, mkCanv) {
     afterLoad = f;
   };
 
-  function lazy(path, cont) {
-    return lazy_(path, null, cont);
+  function lgr_lazy(name, palette, transparency, pcxData) {
+
+    let img;
+    let imgData;
+    let isLoading = false;
+
+    function ondone() {
+      r._ident = {};
+      if (cont) cont(pict);
+      if (--numLoading == 0) allLoaded();
+    }
+  
+    function requested() {
+      if(isLoading) return false
+      if (!img) {
+        ++numLoading;
+        isLoading = true;
+        pcx.getImage(palette, transparency).then(({imageData: _imageData, imageBitmap: _imageBitmap}) => {
+          imgData = _imageData
+          img = _imageBitmap
+          isLoading = false
+          ondone();
+        })
+        return false;
+      }
+      return true;
+    }
+
+    const pict = {
+      name: name,
+      touch: requested,
+  
+      draw: function(canv) {
+        if (requested()) canv.drawImage(img, 0, 0, 1, 1);
+        else loading(canv);
+      },
+
+      drawAt: function(canv) {
+        if (requested()) canv.drawImage(img, 0, 0);
+        else {
+          canv.save();
+          canv.scale(48, 48);
+          loading(canv);
+          canv.restore();
+        }
+      },
+
+      repeat: function(canv, w, h) {
+        if (requested()) {
+          canv.fillStyle = canv.createPattern(img, "repeat");
+          canv.fillRect(0, 0, w, h);
+        } else {
+          canv.save();
+          canv.fillStyle = "blue";
+          canv.fillRect(0, 0, w, h);
+          canv.beginPath();
+          canv.strokeStyle = "white";
+          for (var x = 0; x <= w; x += 20) {
+            canv.moveTo(x, 0);
+            canv.lineTo(x, h);
+          }
+          for (var y = 0; y <= h; y += 20) {
+            canv.moveTo(0, y);
+            canv.lineTo(w, y);
+          }
+          canv.stroke();
+          canv.restore();
+        }
+      },
+
+      frame: function (canv, num, g, showGravity) {
+        if (requested()) {
+          num = Math.floor(num)
+          const frames = Math.floor(img.width/40)
+          canv.drawImage(img, (num % frames) * 40, 0, 40, img.height, 0, 0, 1, 1);
+          // Draw gravity arrows
+          if (g && showGravity) {
+            canv.font = "1px Courier";
+            canv.fillText(arrow(g), 0.2, 0.8);
+          }
+        } else {
+          canv.save();
+          canv.translate(0.5, 0.5);
+          canv.rotate(Math.PI * 2 * num / 50);
+          canv.translate(-0.5, -0.5);
+          loading(canv);
+          canv.restore();
+        }
+      }
+    };
+
+    if(transparency === undefined) transparency = Transparency.TopLeft
+    const pcx = new PCX(pcxData);
+    pict.width = pcx.width;
+    pict.height = pcx.height;
+
+    let cont = function(){}
+    if (name.indexOf("qup_") == 0) {
+      transparency = Transparency.TopLeft;
+      grassUpCount++;
+      cont = function(g) {
+        g.borders = borders(imgData);
+        grassUp.push(g);
+        grassUp.sort(function(a, b) {
+          return (a.name > b.name) - (a.name < b.name);
+        });
+      };
+    }
+    if (name.indexOf("qdown_") == 0) {
+      transparency = Transparency.TopLeft;
+      grassDownCount++;
+      cont = function(g) {
+        g.borders = borders(imgData);
+        grassDown.push(g);
+        grassDown.sort(function(a, b) {
+          return (a.name > b.name) - (a.name < b.name);
+        });
+      };
+    }
+
+    return pict;
   }
 
-  function lazy_(path, name, cont) {
+  function img_lazy(path, cont) {
+    return img_lazy_(path, null, cont);
+  }
+
+  function img_lazy_(path, name, cont) {
     var loaded = false,
       img,
       pict;
@@ -222,11 +379,11 @@ export default function(path, mkImage, mkCanv) {
         }
       },
 
-      frame: function (canv, num, of, g, showGravity) {
+      frame: function (canv, num, g, showGravity) {
         if (requested()) {
-          num = Math.floor(num);
-          var wdPer = img.width / of;
-          canv.drawImage(img, num * wdPer, 0, wdPer, img.height, 0, 0, 1, 1);
+          num = Math.floor(num)
+          const frames = Math.floor(img.width/40)
+          canv.drawImage(img, (num % frames) * 40, 0, 40, img.height, 0, 0, 1, 1);
           // Draw gravity arrows
           if (g && showGravity) {
             canv.font = "1px Courier";
@@ -235,7 +392,7 @@ export default function(path, mkImage, mkCanv) {
         } else {
           canv.save();
           canv.translate(0.5, 0.5);
-          canv.rotate(Math.PI * 2 * num / of);
+          canv.rotate(Math.PI * 2 * num / 50);
           canv.translate(-0.5, -0.5);
           loading(canv);
           canv.restore();
@@ -252,44 +409,79 @@ export default function(path, mkImage, mkCanv) {
     return "";
   }
 
-  imgs.forEach(function (i) {
-    r[i] = lazy_(path + "/" + i + ".png", i);
-  });
-
   var grassUp = [],
     grassDown = [],
     grassUpCount = 0,
     grassDownCount = 0;
 
-  picts.forEach(function(info) {
-    var add;
-    var i = info[0];
-    if (i.indexOf("qup_") == 0) {
-      grassUpCount++;
-      add = function(g) {
-        g.borders = borders(mkCanv, g, true);
-        grassUp.push(g);
-        grassUp.sort(function(a, b) {
-          return (a.name > b.name) - (a.name < b.name);
-        });
-      };
-    }
-    if (i.indexOf("qdown_") == 0) {
-      grassDownCount++;
-      add = function(g) {
-        g.borders = borders(mkCanv, g, false);
-        grassDown.push(g);
-        grassDown.sort(function(a, b) {
-          return (a.name > b.name) - (a.name < b.name);
-        });
-      };
-    }
-
-    var img = (r.picts[i] = lazy_(path + "/picts/" + i + ".png", i, add));
-    img.type = info[1];
-    img.dist = info[2];
-    img.clipping = info[3];
-  });
+  // Load images from a folder containing png files if no lgr is provided (legacy)
+  // or else load directly from a .lgr file
+  if(!lgrFile) {
+    imgs.forEach(function (i) {
+      r[i] = img_lazy_(path + "/" + i + ".png", i);
+    });
+    picts.forEach(function(info) {
+      var add;
+      var i = info[0];
+      if (i.indexOf("qup_") == 0) {
+        grassUpCount++;
+        add = function(g) {
+          g.borders = borders_legacy(mkCanv, g, true);
+          grassUp.push(g);
+          grassUp.sort(function(a, b) {
+            return (a.name > b.name) - (a.name < b.name);
+          });
+        };
+      }
+      if (i.indexOf("qdown_") == 0) {
+        grassDownCount++;
+        add = function(g) {
+          g.borders = borders_legacy(mkCanv, g, false);
+          grassDown.push(g);
+          grassDown.sort(function(a, b) {
+            return (a.name > b.name) - (a.name < b.name);
+          });
+        };
+      }
+  
+      var img = (r.picts[i] = img_lazy_(path + "/picts/" + i + ".png", i, add));
+      img.type = info[1];
+      img.dist = info[2];
+      img.clipping = info[3];
+    });
+  } else {
+    const lgr = LGR.from(lgrFile)
+    const pictureListLookup = lgr.pictureList.reduce((obj, val) => {obj[val.name.toLowerCase()]= val; return obj}, {})
+    const q1bike = new PCX(lgr.pictureData.find(picture => picture.name.toLowerCase() === 'q1bike.pcx').data)
+    const palette = q1bike.getPalette()
+    lgr.pictureData.forEach(function (pictureData) {
+      const name = pictureData.name.toLowerCase().slice(0, pictureData.name.length - 4)
+      const listInfo = pictureListLookup[name]
+      let transparency = listInfo?.pictureType === PictureType.Texture ? Transparency.Solid : listInfo?.transparency
+      if (name === 'qgrass') transparency = Transparency.Solid
+      const img = (r.picts[name] = lgr_lazy(name, palette, transparency, pictureData.data));
+      if(listInfo){
+        img.type = PicType[listInfo.pictureType]
+        img.dist = listInfo.distance
+        img.clipping = img.type !== 'mask' ? PicClip[listInfo.clipping] : ''
+      }
+    })
+    // legacy support
+    r.bike = r.picts.q1bike
+    r.wheel = r.picts.q1wheel
+    r.head = r.picts.q1head
+    r.q1body = r.picts.q1body
+    r.q1up_arm = r.picts.q1up_arm
+    r.q1forarm = r.picts.q1forarm
+    r.q1thigh = r.picts.q1thigh
+    r.q1leg = r.picts.q1leg
+    r.susp1 = r.picts.q1susp1
+    r.susp2 = r.picts.q1susp2
+    r.qfood1 = r.picts.qfood1
+    r.qfood2 = r.picts.qfood2
+    r.qkiller = r.picts.qkiller
+    r.qexit = r.picts.qexit
+  }
 
   r.grassUp = function() {
     if (grassUp.length < grassUpCount)
