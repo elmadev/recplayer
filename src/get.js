@@ -18,14 +18,18 @@ export const getString = function(url, fn) {
 }
 
 // more modern Uint8Array
-export const getArray = function (url, fn) {
+export const getArray = function (url, fn, error) {
   var xhr = new XMLHttpRequest();
   xhr.responseType = "arraybuffer";
 
   xhr.onload = function () {
-    if (xhr.status === 200) {
-      fn(new Uint8Array(xhr.response));
+    if (xhr.status !== 200) {
+      if(error) {
+        error()
+      }
+      return
     }
+    fn(new Uint8Array(xhr.response));
   };
 
   xhr.open("GET", url);

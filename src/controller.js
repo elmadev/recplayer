@@ -1,18 +1,40 @@
 import levReader from "./levReader";
 import recReader from "./recReader";
 import {getString, getArray} from "./get";
-import lgr from "./lgr";
+import { LGRWrapper, UrlImage } from "./lgr";
 import player from "./player";
 
-export default function(
-  levName,
-  resourcePath,
-  elem,
-  document,
-  onFrameUpdate,
-  autoPlay,
-  lgrOverride = '_legacy',
-) {
+/**
+ * @param {Object} arguments
+ * @param {string} arguments.levelUrl - Url path to the level file
+ * @param {HTMLElement} arguments.elem - <div> element which to attach the recplayer
+ * @param {Document} arguments.document - document node of the webpage
+ * @param {Function} arguments.onFrameUpdate - function to call when a new frame is drawn
+ * @param {boolean} arguments.autoPlay - whether to automatically start the replay
+ * @param {string} arguments.lgrFrom - 'file', 'level', 'legacy'
+ * 'file': use a direct lgr filepath e.g. lgrUrl = 'http://api.elma.online/api/lgr/get/default'
+ * 'level': determine the lgr from the level file e.g. lgrUrl = 'http://api.elma.online/api/lgr/get/'
+ * 'legacy': use legacy .png images e.g. lgrUrl = 'https://api.elma.online/recplayer'
+ * @param {string} arguments.lgrUrl - Contains a path to lgr resources based on the parameter lgrFrom:
+ * @param {string} arguments.defaultLgrUrl - Backup lgr if unable to load main lgr e.g. 'http://api.elma.online/api/lgr/get/default'
+ */
+export default function(_args) {
+  let args = _args
+  // Handle legacy arguments:
+  // controller(levelName, imagesPath, elem, document, onFrameUpdate, autoPlay)
+  if(arguments.length > 1) {
+    args = {
+      levelUrl: arguments[0],
+      lgrUrl: arguments[1],
+      elem: arguments[2],
+      document: arguments[3],
+      onFrameUpdate: arguments[4],
+      autoPlay: arguments[5],
+      lgrFrom: 'legacy'
+    }
+  }
+  const {levelUrl, elem, document, onFrameUpdate, autoPlay, lgrFrom, lgrUrl, defaultLgrUrl} = args
+
   var createElement =
     "createElementNS" in document
       ? function(tag) {
@@ -34,17 +56,10 @@ export default function(
     var canvas = canvase.getContext("2d");
     elem.appendChild(canvase);
 
-    getString(levName, function(lev) {
+    getString(levelUrl, function(lev) {
       var levRd = levReader(lev)
       const setup = function(lgrFile) {
-        var pllgr = lgr(
-          lgrFile,
-          resourcePath,
-          function() {
-            return createElement("img");
-          },
-          mkCanv
-        );
+        var pllgr = new LGRWrapper(lgrFile, lgrUrl);
         var pl = player(levRd, pllgr, mkCanv, autoPlay);
 
         function listener(e) {
@@ -188,7 +203,7 @@ export default function(
                   !shirts
                     ? []
                     : shirts.map(function(s) {
-                        return s == null ? null : pllgr.img_lazy(s);
+                        return s == null ? null : new UrlImage(pllgr, '', s);
                       })
                 );
               }
@@ -199,7 +214,7 @@ export default function(
             let loadedShirt = !shirts
               ? []
               : shirts.map(function(s) {
-                  return s == null ? null : pllgr.img_lazy(s);
+                  return s == null ? null : new UrlImage(pllgr, '', s);
                 });
 
             recNames.map(function(r) {
@@ -232,7 +247,7 @@ export default function(
             });
 
             let loadedShirt = newShirts.map(function(s) {
-              return s == null ? null : pllgr.img_lazy(s);
+              return s == null ? null : new UrlImage(pllgr, '', s);
             });
 
             newRecs.map(function(r) {
@@ -248,8 +263,8 @@ export default function(
             animationLoop && window.clearInterval(animationLoop);
           },
 
-          loadLevel: function(levName, cont) {
-            getString(levName, function(lev) {
+          loadLevel: function(levelUrl, cont) {
+            getString(levelUrl, function(lev) {
               pl.changeLevel(levReader(lev));
               if (cont) cont();
             });
@@ -270,12 +285,23 @@ export default function(
           },
         });
       }
-      var lgrName = lgrOverride || levRd.lgr()
-      if (lgrName !== '_legacy') {
-        var lgrGet = `${resourcePath}${lgrName}`
-        getArray(lgrGet, setup)
-      } else {
-        setup(null)
+      const getBackupLgr = (originalUrl) => () => {
+        // Try to download default.lgr, or else use legacy png lgr
+        console.log(`Recplayer - Unable to load ${originalUrl}, trying to load ${defaultLgrUrl} instead`)
+        getArray(defaultLgrUrl, setup, () => {
+          console.log(`Recplayer - Unable to load ${defaultLgrUrl}, using legacy .png files`)
+          setup(null)
+        })
+      }
+      if (lgrFrom === 'legacy') {
+        setup(null);
+      }
+      if (lgrFrom === 'file') {
+        getArray(lgrUrl, setup, getBackupLgr(lgrUrl));
+      }
+      if (lgrFrom === 'level') {
+        var lgrUrlComplete = `${lgrUrl}${levRd.lgr()}`;
+        getArray(lgrUrlComplete, setup, getBackupLgr(lgrUrlComplete));
       }
     });
   };
