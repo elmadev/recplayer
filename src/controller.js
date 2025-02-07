@@ -14,9 +14,10 @@ import player from "./player";
  * @param {string} arguments.lgrFrom - 'file', 'level', 'legacy'
  * 'file': use a direct lgr filepath e.g. lgrUrl = 'http://api.elma.online/api/lgr/get/default'
  * 'level': determine the lgr from the level file e.g. lgrUrl = 'http://api.elma.online/api/lgr/get/'
- * 'legacy': use legacy .png images e.g. lgrUrl = 'https://api.elma.online/recplayer'
- * @param {string} arguments.lgrUrl - Contains a path to lgr resources based on the parameter lgrFrom:
+ * 'legacy': use legacy .png images e.g. legacy_url = 'https://api.elma.online/recplayer'
+ * @param {string} arguments.lgrUrl - Contains a path to lgr resources based on the parameter lgrFrom
  * @param {string} arguments.defaultLgrUrl - Backup lgr if unable to load main lgr e.g. 'http://api.elma.online/api/lgr/get/default'
+ * @param {string} arguments.legacy_url - Contains a path to png lgr resources if the parameter lgrFrom is 'legacy'
  */
 export default function(_args) {
   let args = _args
@@ -25,7 +26,7 @@ export default function(_args) {
   if(arguments.length > 1) {
     args = {
       levelUrl: arguments[0],
-      lgrUrl: arguments[1],
+      legacy_url: arguments[1],
       elem: arguments[2],
       document: arguments[3],
       onFrameUpdate: arguments[4],
@@ -33,7 +34,7 @@ export default function(_args) {
       lgrFrom: 'legacy'
     }
   }
-  const {levelUrl, elem, document, onFrameUpdate, autoPlay, lgrFrom, lgrUrl, defaultLgrUrl} = args
+  const {levelUrl, elem, document, onFrameUpdate, autoPlay, lgrFrom, lgrUrl, defaultLgrUrl, legacy_url} = args
 
   var createElement =
     "createElementNS" in document
@@ -59,7 +60,7 @@ export default function(_args) {
     getString(levelUrl, function(lev) {
       var levRd = levReader(lev)
       const setup = function(lgrFile) {
-        var pllgr = new LGRWrapper(lgrFile, lgrUrl);
+        var pllgr = new LGRWrapper(lgrFile, legacy_url);
         var pl = player(levRd, pllgr, mkCanv, autoPlay);
 
         function listener(e) {
