@@ -21,7 +21,7 @@ import player from "./player";
  */
 export default function(_args) {
   let args = _args
-  // Handle legacy arguments:
+  // Handle legacy arguments for backwards-compatibility:
   // controller(levelName, imagesPath, elem, document, onFrameUpdate, autoPlay)
   if(arguments.length > 1) {
     args = {

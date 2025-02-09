@@ -1,5 +1,5 @@
 import { LGR, PictureType, Transparency } from "elmajs";
-import { PCX } from "./pcx";
+import { PCX } from "elma-pcx";
 
 const legacy_imgs = [
   "bike",
@@ -227,11 +227,16 @@ class LGRImage {
 
   static arrow(gravity) {
     switch (gravity) {
-      case 1: return "\u2191";
-      case 2: return "\u2193";
-      case 3: return "\u2190";
-      case 4: return "\u2192";
-      default: return "";
+      case 1:
+        return "\u2191";
+      case 2:
+        return "\u2193";
+      case 3:
+        return "\u2190";
+      case 4:
+        return "\u2192";
+      default:
+        return "";
     }
   }
 
@@ -271,7 +276,7 @@ export class UrlImage extends LGRImage {
   }
 
   loadImage() {
-    const _image = document.createElement('img');
+    const _image = document.createElement("img");
     _image.src = this.url;
     _image.onload = () => {
       this.width = _image.width;
@@ -311,20 +316,22 @@ export class PCXImage extends LGRImage {
   }
 
   loadImage() {
-    this.pcx
-      .getImage(this.lgr.palette, this.getTransparency())
-      .then(({ imageData, imageBitmap }) => {
-        this.image = imageBitmap;
-        this.imageData = imageData;
-        this.imageLoaded();
-      });
+    const colorData = this.pcx.getImage(
+      this.lgr.palette,
+      this.getTransparency()
+    );
+    this.imageData = new ImageData(colorData, this.width, this.height, {});
+    createImageBitmap(this.imageData).then((imageBitmap) => {
+      this.image = imageBitmap;
+      this.imageLoaded();
+    });
   }
 }
 
 export class LGRWrapper {
   constructor(lgrFile, legacy_path) {
     this._ident = {};
-    this.playerInvalidate = function() {} // Should really be using _ident here instead TODO
+    this.playerInvalidate = function () {}; // callback function for player.js
     this.picts = {};
     this.grassUp = [];
     this.grassDown = [];
@@ -386,7 +393,7 @@ export class LGRWrapper {
     if (image.isGrassUp() || image.isGrassDown()) {
       image.getImage();
     }
-    return image
+    return image;
   }
 
   assignFood() {

@@ -9,6 +9,7 @@
   "author": "Ville Jänkälä",
   "license": "ISC",
   "dependencies": {
+    "elma-pcx": "^1.0.0",
     "elmajs": "^1.2.2"
   }
 }
