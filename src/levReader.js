@@ -92,21 +92,21 @@ export default function levReader(data) {
     lgr: function() {
       if (elma) {
         br.seek(offsLgr);
-        return br.string(16);
+        return br.string(16).toLowerCase();
       } else return "default";
     },
 
     ground: function() {
       if (elma) {
         br.seek(offsGround);
-        return br.string(10);
+        return br.string(10).toLowerCase();
       } else return "ground";
     },
 
     sky: function() {
       if (elma) {
         br.seek(offsSky);
-        return br.string(10);
+        return br.string(10).toLowerCase();
       } else return "sky";
     },
 
@@ -181,9 +181,9 @@ export default function levReader(data) {
 
     pic: (pic = function(n, onPic) {
       br.seek(offsPics + n * (10 + 10 + 10 + 8 + 8 + 4 + 4));
-      var picture = br.pstring(10),
-        texture = br.pstring(10),
-        mask = br.pstring(10);
+      var picture = br.pstring(10).toLowerCase(),
+        texture = br.pstring(10).toLowerCase(),
+        mask = br.pstring(10).toLowerCase();
       var vx = br.binFloat64le(),
         vy = br.binFloat64le();
       var dist = br.word32le(),
