@@ -48,9 +48,9 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
 
   reset();
 
-  lgr.afterLoad(function() {
+  lgr.playerInvalidate = function() {
     invalidate = true;
-  });
+  };
 
   function reset() {
     replays = [];
@@ -262,14 +262,6 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
     setRef();
   }
 
-  function arrow(str) {
-    if (str == "up") return "\u2191";
-    if (str == "down") return "\u2193";
-    if (str == "left") return "\u2190";
-    if (str == "right") return "\u2192";
-    return "";
-  }
-
   function eround(n) {
     var escale = 48 * getScale();
     return Math.round(n * escale) / escale;
@@ -463,7 +455,6 @@ export default function(levRd, lgr, makeCanvas, autoPlay) {
       return drawFrame(canv, x, y, w, h, lastFrame);
     },
 
-    // shirts should be created by lgr.lazy
     addReplay: function(recRd, recName, shirts) {
       var replay = { recName: recName, objRn: objRender(levRd, recRd), subs: [] };
       while (recRd) {

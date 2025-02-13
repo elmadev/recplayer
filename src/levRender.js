@@ -92,7 +92,7 @@ export default function levRender(reader, lgr) {
         [pic.picture, pic.mask, pic.texture].forEach(function(picname) {
           var img = lgr.picts[picname];
           if (img && img.width !== undefined && img.height !== undefined) {
-            img.touch();
+            img.getImage();
             maxImgW = Math.max(maxImgW, img.width / 48);
             maxImgH = Math.max(maxImgH, img.height / 48);
           }
@@ -175,8 +175,8 @@ export default function levRender(reader, lgr) {
 
         var curX = poly[minXi][0] * scale,
           curY = poly[minXi][1] * scale;
-        var gUps = lgr.grassUp(),
-          gDowns = lgr.grassDown();
+        var gUps = lgr.grassUp,
+          gDowns = lgr.grassDown;
         while (curX < maxX * scale) {
           var bestD = Infinity,
             bestA,
@@ -262,7 +262,7 @@ export default function levRender(reader, lgr) {
           py = Math.round(pic.y * scale);
         var offsX = px >= 0 ? px % img.width : img.width - -px % img.width;
         var offsY = py >= 0 ? py % img.height : img.height - -py % img.height;
-        mask.touch();
+        mask.getImage();
         canv.save();
         canv.translate(pic.x * scale, pic.y * scale);
         canv.beginPath();

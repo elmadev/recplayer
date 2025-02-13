@@ -86,7 +86,6 @@ export default function binReader(data) {
   }
 
   function int16le() {
-    //console.log("0x" + pos.toString(16));
     var r = word16le();
     return r > 1 << 15 ? r - (1 << 16) : r;
   }

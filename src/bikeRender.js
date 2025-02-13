@@ -117,7 +117,7 @@ function wheel(canv, lgr, wheelX, wheelY, wheelR) {
   canv.rotate(-wheelR);
   canv.scale(38.4 / 48, 38.4 / 48);
   canv.translate(-0.5, -0.5);
-  lgr.wheel.draw(canv);
+  lgr.picts.q1wheel.draw(canv);
   canv.restore();
 }
 
@@ -198,7 +198,7 @@ export default function bikeRender(canv, lgr, shirt, frame, x, y, scale, startX,
   r = hypot(wx, wy);
   skewimage(
     canv,
-    lgr.susp1,
+    lgr.picts.q1susp1,
     2,
     0.5,
     5,
@@ -214,10 +214,10 @@ export default function bikeRender(canv, lgr, shirt, frame, x, y, scale, startX,
   wy = turn ? -leftY : -rightY;
   a = Math.atan2(wy, (turn ? -1 : 1) * wx) + (turn ? -1 : 1) * bikeR;
   r = hypot(wx, wy);
-  //skewimage(canv, lgr.susp2, 5, 0.5, 5, 6.5, 48*r*Math.cos(a), 48*r*Math.sin(a), 10, 20);
+  //skewimage(canv, lgr.picts.q1susp2, 5, 0.5, 5, 6.5, 48*r*Math.cos(a), 48*r*Math.sin(a), 10, 20);
   skewimage(
     canv,
-    lgr.susp2,
+    lgr.picts.q1susp2,
     0,
     0.5,
     5,
@@ -233,7 +233,7 @@ export default function bikeRender(canv, lgr, shirt, frame, x, y, scale, startX,
   canv.translate(-43 / 48, -12 / 48);
   canv.rotate(-Math.PI * 0.197);
   canv.scale(0.215815 * 380 / 48, 0.215815 * 301 / 48);
-  lgr.bike.draw(canv);
+  lgr.picts.q1bike.draw(canv);
   canv.restore();
 
   canv.save(); // kuski
@@ -246,26 +246,26 @@ export default function bikeRender(canv, lgr, shirt, frame, x, y, scale, startX,
   canv.save(); // head
   canv.translate(-15.5 / 48, -42 / 48);
   canv.scale(23 / 48, 23 / 48);
-  lgr.head.draw(canv);
+  lgr.picts.q1head.draw(canv);
   canv.restore();
 
   var bumx = 19.5 / 48,
     bumy = 0;
   var pedalx = -wx + 10.2 / 48 / 3,
     pedaly = -wy + 65 / 48 / 3;
-  legLimb(canv, lgr.q1thigh, bumx, bumy, lgr.q1leg, pedalx, pedaly);
+  legLimb(canv, lgr.picts.q1thigh, bumx, bumy, lgr.picts.q1leg, pedalx, pedaly);
 
   canv.save(); // torso
   canv.translate(17 / 48, 9.25 / 48);
   canv.rotate(Math.PI + 2 / 3);
   canv.scale(100 / 48 / 3, 58 / 48 / 3);
-  if (shirt && shirt.touch()) {
+  if (shirt && shirt.getImage()) {
     // assumes shirts are rotated as on EOL site
     canv.translate(0.5, 0.5);
     canv.rotate(Math.PI / 2);
     canv.translate(-0.5, -0.5);
     shirt.draw(canv);
-  } else lgr.q1body.draw(canv);
+  } else lgr.picts.q1body.draw(canv);
   canv.restore();
 
   var shoulderx = 0 / 48,
@@ -296,10 +296,10 @@ export default function bikeRender(canv, lgr, shirt, frame, x, y, scale, startX,
 
   armLimb(
     canv,
-    lgr.q1up_arm,
+    lgr.picts.q1up_arm,
     shoulderx,
     shouldery,
-    lgr.q1forarm,
+    lgr.picts.q1forarm,
     handx,
     handy
   );

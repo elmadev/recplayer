@@ -1,11 +1,15 @@
 {
   "name": "recplayer",
-  "version": "1.0.3",
+  "version": "2.0.0",
   "description": "ES6 port of recplay",
   "main": "src/controller.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Ville Jänkälä",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "elma-pcx": "^1.0.1",
+    "elmajs": "^1.2.2"
+  }
 }
