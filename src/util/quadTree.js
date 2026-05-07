@@ -1,4 +1,4 @@
-import geom from "./geom";
+import geom from "./geom.js";
 
 // an append-only quad tree
 

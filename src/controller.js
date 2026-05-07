@@ -1,8 +1,8 @@
-import levReader from "./levReader";
-import recReader from "./recReader";
-import {getString, getArray} from "./get";
-import { LGRWrapper, UrlImage } from "./lgr";
-import player from "./player";
+import levReader from "./levReader.js";
+import recReader from "./recReader.js";
+import {getString, getArray} from "./get.js";
+import { LGRWrapper, UrlImage } from "./lgr.js";
+import player from "./player.js";
 
 /**
  * @param {Object} arguments

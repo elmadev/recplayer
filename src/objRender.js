@@ -1,4 +1,4 @@
-import geom from "./util/geom";
+import geom from "./util/geom.js";
 
 export default function objRender(levReader, recReader) {
   var appleCount = 0;

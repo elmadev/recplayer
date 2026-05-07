@@ -1,4 +1,5 @@
-import { LGR, PictureType, Transparency } from "elmajs";
+import elmajs from "elmajs";
+const { LGR, PictureType, Transparency } = elmajs;
 import { PCX } from "elma-pcx";
 
 const legacy_imgs = [

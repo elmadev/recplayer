@@ -1,4 +1,4 @@
-import binReader from "./binReader";
+import binReader from "./binReader.js";
 
 var ticker = (function() {
   var n = 0;

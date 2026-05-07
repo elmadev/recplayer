@@ -1,7 +1,7 @@
-import levRender from "./levRender";
-import recRender from "./recRender";
-import objRender from "./objRender";
-import bikeRender from "./bikeRender";
+import levRender from "./levRender.js";
+import recRender from "./recRender.js";
+import objRender from "./objRender.js";
+import bikeRender from "./bikeRender.js";
 
 var isMozilla =
   typeof navigator != "undefined" &&
