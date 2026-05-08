@@ -126,7 +126,7 @@ class NodePCXImage extends NodeLGRImage {
 class NodeLGRWrapper {
   constructor(lgrBytes, createCanvas, createImageData) {
     this._ident = {};
-    this.playerInvalidate = () => {};
+    this.playerInvalidate = () => { };
     this.picts = {};
     this.grassUp = [];
     this.grassDown = [];
@@ -230,7 +230,7 @@ export async function renderFrame({
   if (scale !== undefined) pl.setScale(scale);
 
   const frameNumber =
-    timestamp !== undefined ? Math.round(timestamp * 30) : (frame ?? 0);
+    timestamp !== undefined ? timestamp * 30 : (frame ?? 0);
 
   const canvas = createCanvas(width, height);
   pl.drawFrame(canvas.getContext("2d"), 0, 0, width, height, frameNumber);
@@ -283,9 +283,7 @@ export async function renderGif({
   const totalDuration = recRd ? recRd.frameCount() / 30 : 0;
   const end = endTime !== undefined ? endTime : totalDuration;
 
-  const canvas = createCanvas(width, height);
-  const ctx = canvas.getContext("2d");
-  const delay = Math.round((interval / speed) * 1000);
+  const delay = interval * (indexed ? 100 : 1000) / speed;
 
   if (indexed) {
     let GifWriter;
@@ -326,17 +324,18 @@ export async function renderGif({
     const loopOpts = repeat === -1 ? {} : { loop: repeat };
     const gf = new GifWriter(buf, width, height, { ...loopOpts, palette: omggifPalette });
 
-    // Disable smoothing so composited pixels stay as close to palette colors as possible
-    ctx.imageSmoothingEnabled = false;
-
     for (let t = startTime; t <= end + 1e-9; t += interval) {
-      pl.drawFrame(ctx, 0, 0, width, height, Math.round(t * 30));
+      const canvas = createCanvas(width, height);
+      const ctx = canvas.getContext("2d");
+      // Disable smoothing so composited pixels stay as close to palette colors as possible
+      ctx.imageSmoothingEnabled = false;
+      pl.drawFrame(ctx, 0, 0, width, height, t * 30);
       const { data } = ctx.getImageData(0, 0, width, height);
       const pixels = new Uint8Array(width * height);
       for (let i = 0; i < pixels.length; i++) {
         pixels[i] = nearestIndex(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]);
       }
-      gf.addFrame(0, 0, width, height, pixels, { delay: Math.round((interval / speed) * 100) });
+      gf.addFrame(0, 0, width, height, pixels, { delay: Math.round(delay) });
     }
 
     return buf.slice(0, gf.end());
@@ -356,7 +355,9 @@ export async function renderGif({
   gif.start();
 
   for (let t = startTime; t <= end + 1e-9; t += interval) {
-    pl.drawFrame(ctx, 0, 0, width, height, Math.round(t * 30));
+    const canvas = createCanvas(width, height);
+    const ctx = canvas.getContext("2d");
+    pl.drawFrame(ctx, 0, 0, width, height, t * 30);
     gif.addFrame(ctx);
   }
 
