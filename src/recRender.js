@@ -1,4 +1,4 @@
-import bikeRender from "./bikeRender";
+import bikeRender from "./bikeRender.js";
 
 function target(canv, x, y, s) {
   canv.beginPath();

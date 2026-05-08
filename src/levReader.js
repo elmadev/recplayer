@@ -1,4 +1,4 @@
-import binReader from "./binReader";
+import binReader from "./binReader.js";
 
 export default function levReader(data) {
   var br = binReader(data);
@@ -67,7 +67,7 @@ export default function levReader(data) {
 
   var obj, pic; // initialised in the object literal :\
 
-  return (window.lrd = {
+  return {
     rightType: function() {
       return ["POT14", "POT06"].indexOf(levVersion()) >= 0;
     },
@@ -205,5 +205,5 @@ export default function levReader(data) {
         };
       });
     }
-  });
+  };
 }
