@@ -155,6 +155,7 @@ export default function levRender(reader, lgr) {
   var grass = (function() {
     var tree;
     var maxImgW, maxImgH; // for overbounding in .traverse
+    let seq; // the game's draw order
     const MAX_HEIGHTMAP_LENGTH = 10000; // canvas.cpp, at zoom 1
 
     // assuming w and h are positive
@@ -165,6 +166,7 @@ export default function levRender(reader, lgr) {
     function calc() {
       tree = quadTree(1);
       maxImgW = maxImgH = 0;
+      seq = 0;
 
       grassPolys.forEach(function(p) {
         calcGrassPoly(48, p);
@@ -279,7 +281,7 @@ export default function levRender(reader, lgr) {
           const top = y - Math.ceil((bestPict.height - bestFall) / 2);
           maxImgW = Math.max(maxImgW, bestPict.width / scale);
           maxImgH = Math.max(maxImgH, bestPict.height / scale);
-          tree.add(x / scale, top / scale, bestPict);
+          tree.add(x / scale, top / scale, { pict: bestPict, seq: seq++ });
 
           x += bestPict.width;
           y += bestFall;
@@ -314,11 +316,15 @@ export default function levRender(reader, lgr) {
         )
       )
         return;
-      canv.save();
-      canv.translate(pic.x * scale, pic.y * scale);
-      canv.scale(scale / 48, scale / 48);
-      img.drawAt(canv);
-      canv.restore();
+      const left = Math.round(pic.x * scale);
+      const top = Math.round(pic.y * scale);
+      img.drawRect(
+        canv,
+        left,
+        top,
+        Math.round((pic.x + img.width / 48) * scale) - left,
+        Math.round((pic.y + img.height / 48) * scale) - top
+      );
       return;
     }
     img = lgr.picts[pic.texture];
@@ -387,6 +393,21 @@ export default function levRender(reader, lgr) {
   // every polygon, in Elma dimensions
   let polyPath = null;
 
+  // scratch layer for ground clipped drawing, reused across tiles
+  let layerCanvas = null;
+  function clearLayer(w, h, scale) {
+    const pw = Math.ceil(w * scale);
+    const ph = Math.ceil(h * scale);
+    if (!layerCanvas) layerCanvas = document.createElement("canvas");
+    if (layerCanvas.width != pw || layerCanvas.height != ph) {
+      layerCanvas.width = pw;
+      layerCanvas.height = ph;
+    }
+    const ctx = layerCanvas.getContext("2d");
+    ctx.clearRect(0, 0, pw, ph);
+    return ctx;
+  }
+
   // the region ground clipped drawing is confined to, in viewport coordinates
   function groundPath(x, y, w, h, scale) {
     if (!polyPath) {
@@ -436,31 +457,90 @@ export default function levRender(reader, lgr) {
     return cached.path;
   }
 
-  // assumes the ground clip is already in effect
+  // draws into the ground clipped layer
   function drawGrass(canv, x, y, w, h, scale) {
-    const outlines = new Path2D();
-    grass.traverse(x, y, w, h + 24, function(grassX, grassY, pict) {
-      const s = scale / 48;
-      outlines.addPath(
-        grassOutline(pict),
-        new DOMMatrix([s, 0, 0, s, (grassX - x) * scale, (grassY - y) * scale])
-      );
+    const pieces = [];
+    grass.traverse(x, y, w, h + 24, function(grassX, grassY, piece) {
+      pieces.push({ x: grassX, y: grassY, piece: piece });
     });
-    canv.save();
-    canv.clip(outlines);
-    fillTexture(canv, lgr.picts.qgrass, x, y, w, h, scale);
-    canv.restore();
+    if (!pieces.length) return;
 
-    canv.save();
-    canv.translate(-x * scale, -y * scale);
-    grass.traverse(x, y, w, h, function(grassX, grassY, pict) {
-      canv.save();
-      canv.translate(grassX * scale, grassY * scale);
-      canv.scale(scale / 48, scale / 48);
-      pict.drawAt(canv);
-      canv.restore();
+    // Grass is all at one distance, where the game keeps the first thing
+    // drawn, so pieces go back to front. Non-overlapping ones share a batch.
+    pieces.sort(function(a, b) {
+      return b.piece.seq - a.piece.seq;
     });
-    canv.restore();
+
+    const s = scale / 48;
+    const qgrass = lgr.picts.qgrass;
+    // null until qgrass is there and loaded; the pieces still get drawn
+    let pattern = null;
+    if (qgrass) {
+      const phase = texturePhase(qgrass, x, y, scale);
+      pattern = qgrass.pattern(canv, phase.x, phase.y);
+    }
+    if (pattern) canv.fillStyle = pattern;
+
+    // what a piece covers, qgrass margin included, in Elma dimensions
+    function box(p) {
+      return {
+        x1: p.x,
+        x2: p.x + p.piece.pict.width / 48,
+        y1: p.y - 20 / 48,
+        y2: p.y + p.piece.pict.height / 48
+      };
+    }
+
+    let batch = [];
+    let boxes = [];
+
+    function overlapsBatch(b) {
+      for (let i = 0; i < boxes.length; i++) {
+        const o = boxes[i];
+        if (b.x1 < o.x2 && o.x1 < b.x2 && b.y1 < o.y2 && o.y1 < b.y2)
+          return true;
+      }
+      return false;
+    }
+
+    function flush() {
+      if (!batch.length) return;
+      if (pattern) {
+        const outlines = new Path2D();
+        batch.forEach(function(p) {
+          // half a pixel of overlap; a shared edge leaves a hairline
+          const sx = s + 0.5 / p.piece.pict.width;
+          outlines.addPath(
+            grassOutline(p.piece.pict),
+            new DOMMatrix([sx, 0, 0, s, (p.x - x) * scale, (p.y - y) * scale])
+          );
+        });
+        canv.fill(outlines);
+      }
+      batch.forEach(function(p) {
+        // whole pixels; fractional edges leave a seam
+        const pict = p.piece.pict;
+        const left = Math.round((p.x - x) * scale);
+        const top = Math.round((p.y - y) * scale);
+        pict.drawRect(
+          canv,
+          left,
+          top,
+          Math.round((p.x - x + pict.width / 48) * scale) - left,
+          Math.round((p.y - y + pict.height / 48) * scale) - top
+        );
+      });
+      batch = [];
+      boxes = [];
+    }
+
+    pieces.forEach(function(p) {
+      const b = box(p);
+      if (overlapsBatch(b)) flush();
+      batch.push(p);
+      boxes.push(b);
+    });
+    flush();
   }
 
   // (x, y)–(x + w, y + h): viewport in Elma dimensions
@@ -494,16 +574,25 @@ export default function levRender(reader, lgr) {
     // clip isn't antialiased in Chromium—different with destination-out
     const ground = groundPath(x, y, w, h, scale);
 
-    canv.save();
-    canv.clip(ground);
+    // Ground clipped drawing collects in a layer and is clipped once on the way
+    // out; clipping each thing separately antialiases the same edge repeatedly
+    // and leaves a hairline along the ground.
+    const target = clearLayer(w, h, scale);
+
     void (function() {
       // TODO: check that it's not accessing something it shouldn't
       var img =
         (optCustomBackgroundSky && lgr.picts[reader.ground()]) ||
         lgr.picts.ground;
-      fillTexture(canv, img, x, y, w, h, scale);
+      fillTexture(target, img, x, y, w, h, scale);
     })();
-    canv.restore();
+
+    function flushGround() {
+      canv.save();
+      canv.clip(ground);
+      canv.drawImage(target.canvas, 0, 0);
+      canv.restore();
+    }
 
     // pictures and grass share one distance buffer (canvas.cpp)
     const items = pics
@@ -517,27 +606,24 @@ export default function levRender(reader, lgr) {
       items.push({ grass: true, dist: GRASS_DISTANCE, clipped: true });
     items.sort(byDepth);
 
-    // clip only needs toggling when a run of same-clipping items ends
-    let clipped = false;
+    let clipped = true;
     items.forEach(function(item) {
       if (item.clipped != clipped) {
-        if (clipped) canv.restore();
-        else {
-          canv.save();
-          canv.clip(ground);
-        }
+        if (clipped) flushGround();
+        else clearLayer(w, h, scale); // start a fresh clipped batch
         clipped = item.clipped;
       }
+      const dest = clipped ? target : canv;
       if (!item.pic) {
-        drawGrass(canv, x, y, w, h, scale);
+        drawGrass(dest, x, y, w, h, scale);
         return;
       }
-      canv.save();
-      canv.translate(-x * scale, -y * scale);
-      drawPicture(item.pic, canv, scale, x, y, w, h);
-      canv.restore();
+      dest.save();
+      dest.translate(-x * scale, -y * scale);
+      drawPicture(item.pic, dest, scale, x, y, w, h);
+      dest.restore();
     });
-    if (clipped) canv.restore();
+    if (clipped) flushGround();
 
     canv.strokeStyle = "#ff0000";
     if (window.dbg) {
@@ -598,14 +684,22 @@ export default function levRender(reader, lgr) {
           (yp + num * hp) * f >= y + h;
         lastScale = scale;
         if (covers) {
+          // edges rounded so that neighbouring tiles still share one, rather
+          // than each landing on a fraction of a pixel and leaving a seam
+          const edgeX = [];
+          const edgeY = [];
+          for (let i = 0; i <= num; i++) {
+            edgeX.push(Math.round((xp + i * wp) * f) - x);
+            edgeY.push(Math.round((yp + i * hp) * f) - y);
+          }
           for (let xi = 0; xi < num; xi++)
             for (let yi = 0; yi < num; yi++)
               canv.drawImage(
                 canvs[yi * num + xi],
-                (xp + xi * wp) * f - x,
-                (yp + yi * hp) * f - y,
-                wp * f,
-                hp * f
+                edgeX[xi],
+                edgeY[yi],
+                edgeX[xi + 1] - edgeX[xi],
+                edgeY[yi + 1] - edgeY[yi]
               );
           return;
         }

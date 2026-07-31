@@ -195,13 +195,15 @@ class LGRImage {
     }
   }
 
-  drawAt(canv) {
+  // draws into an exact pixel rect, so neighbours meet cleanly
+  drawRect(canv, x, y, w, h) {
     const image = this.getImage();
     if (image) {
-      canv.drawImage(image, 0, 0);
+      canv.drawImage(image, x, y, w, h);
     } else {
       canv.save();
-      canv.scale(48, 48);
+      canv.translate(x, y);
+      canv.scale(w, h);
       this.constructor.placeholder_image(canv);
       canv.restore();
     }
