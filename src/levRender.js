@@ -86,7 +86,9 @@ export default function levRender(reader, lgr) {
 
   // canvas origin: level bounds plus a margin, snapped to pixel centres, y up
   function textureAnchor(scale) {
-    if (!isFinite(minX) || !isFinite(maxY)) return { x: 0, y: 0 };
+    if (!isFinite(minX) || !isFinite(maxY)) {
+      return { x: 0, y: 0 };
+    }
     return {
       x: Math.trunc((minX - CANVAS_MARGIN_X) * scale) + 0.5,
       y: 1 - (Math.trunc((-maxY - CANVAS_MARGIN_Y) * scale) + 0.5)
@@ -168,6 +170,15 @@ export default function levRender(reader, lgr) {
       maxImgW = maxImgH = 0;
       seq = 0;
 
+      // the least an lgr needs for grass
+      if (lgr.grass.length < 2 || !lgr.picts.qgrass) {
+        return;
+      }
+      // and every heightmap, which lands when the image loads
+      if (!lgr.grass.every((pict) => pict.borders)) {
+        return;
+      }
+
       grassPolys.forEach(function(p) {
         calcGrassPoly(48, p);
       });
@@ -184,7 +195,9 @@ export default function levRender(reader, lgr) {
             widest = length;
           }
         }
-        if (widest < 0.0001) return null;
+        if (widest < 0.0001) {
+          return null;
+        }
 
         let v2 = (v1 + 1) % poly.length;
         const counterclockwise = !(poly[v1][0] < poly[v2][0]);
@@ -197,7 +210,9 @@ export default function levRender(reader, lgr) {
         function addLine(a, b) {
           const r1 = poly[a];
           const r2 = poly[b];
-          if (r1[0] > r2[0]) return; // runs right to left
+          if (r1[0] > r2[0]) {
+            return; // runs right to left
+          }
 
           const x1 = Math.floor(r1[0] * scale);
           const x2 = Math.floor(r2[0] * scale);
@@ -209,7 +224,9 @@ export default function levRender(reader, lgr) {
             cur = x1;
             heightmap[0] = Math.floor(y1);
           }
-          if (x1 >= x2) return;
+          if (x1 >= x2) {
+            return;
+          }
           // past the cap, or a gap the walk can't cross: the line ends here,
           // and later edges can only start further right
           if (x1 - x0 >= MAX_HEIGHTMAP_LENGTH || cur < x1 - 1) {
@@ -218,7 +235,9 @@ export default function levRender(reader, lgr) {
           }
 
           for (let x = x1; x <= x2; x++) {
-            if (x < cur) continue; // doubled back, keep what's there
+            if (x < cur) {
+              continue; // doubled back, keep what's there
+            }
             if (x - x0 >= MAX_HEIGHTMAP_LENGTH) {
               done = true;
               return;
@@ -237,11 +256,8 @@ export default function levRender(reader, lgr) {
           addLine(counterclockwise ? v1 : v2, counterclockwise ? v2 : v1);
         }
 
-        if (x0 === null) return null;
-
-        // fill in columns the walk missed
-        for (let i = 1; i <= cur - x0; i++) {
-          if (heightmap[i] === undefined) heightmap[i] = heightmap[i - 1];
+        if (x0 === null) {
+          return null;
         }
 
         return { x0: x0, heightmap: heightmap, length: cur - x0 + 1 };
@@ -249,10 +265,9 @@ export default function levRender(reader, lgr) {
 
       function calcGrassPoly(scale, poly) {
         const map = heightmapFor(scale, poly);
-        if (!map) return;
-
-        const picts = lgr.grass.filter((pict) => pict.borders);
-        if (!picts.length) return;
+        if (!map) {
+          return;
+        }
 
         const end = map.x0 + map.length;
         let x = map.x0;
@@ -263,7 +278,7 @@ export default function levRender(reader, lgr) {
           let bestScore = Infinity;
           let bestPict = null;
           let bestFall = 0;
-          for (const pict of picts) {
+          for (const pict of lgr.grass) {
             const fall = (pict.height - 41) * (pict.isGrassUp() ? -1 : 1);
             const target = x + pict.width;
             const targetY =
@@ -314,8 +329,9 @@ export default function levRender(reader, lgr) {
           w,
           h
         )
-      )
+      ) {
         return;
+      }
       const left = Math.round(pic.x * scale);
       const top = Math.round(pic.y * scale);
       img.drawRect(
@@ -341,8 +357,9 @@ export default function levRender(reader, lgr) {
           w,
           h
         )
-      )
+      ) {
         return;
+      }
       // The texture tiles from the canvas origin rather than from this
       // picture's own corner, so masked pictures that sit next to each other
       // line up on one continuous pattern. Unlike the game, it tiles at its
@@ -374,20 +391,27 @@ export default function levRender(reader, lgr) {
 
   // tie order: ground clipped, grass, sky clipped, unclipped (canvas.cpp)
   function tiePriority(item) {
-    if (item.grass) return 1;
-    const pic = item.pic || item;
-    return pic.clipping == "g" ? 0 : pic.clipping == "s" ? 2 : 3;
+    if (item.grass) {
+      return 1;
+    }
+    if (item.pic.clipping == "g") {
+      return 0;
+    }
+    if (item.pic.clipping == "s") {
+      return 2;
+    }
+    return 3;
   }
 
   // Paint order: furthest first, so whatever the game would keep ends up last
   function byDepth(a, b) {
-    const pa = a.pic || a;
-    const pb = b.pic || b;
-    return (
-      b.dist - a.dist ||
-      tiePriority(b) - tiePriority(a) ||
-      (pb.num || 0) - (pa.num || 0)
-    );
+    return b.dist - a.dist || tiePriority(b) - tiePriority(a) || b.num - a.num;
+  }
+
+  // sky clipped pictures carry +DISTANCE_SKY_CLIPPING_CORRECTION, which puts
+  // them behind everything else
+  function isSkyClipped(item) {
+    return !item.grass && item.pic.clipping == "s";
   }
 
   // every polygon, in Elma dimensions
@@ -398,7 +422,9 @@ export default function levRender(reader, lgr) {
   function clearLayer(w, h, scale) {
     const pw = Math.ceil(w * scale);
     const ph = Math.ceil(h * scale);
-    if (!layerCanvas) layerCanvas = document.createElement("canvas");
+    if (!layerCanvas) {
+      layerCanvas = document.createElement("canvas");
+    }
     if (layerCanvas.width != pw || layerCanvas.height != ph) {
       layerCanvas.width = pw;
       layerCanvas.height = ph;
@@ -463,7 +489,9 @@ export default function levRender(reader, lgr) {
     grass.traverse(x, y, w, h + 24, function(grassX, grassY, piece) {
       pieces.push({ x: grassX, y: grassY, piece: piece });
     });
-    if (!pieces.length) return;
+    if (!pieces.length) {
+      return;
+    }
 
     // Grass is all at one distance, where the game keeps the first thing
     // drawn, so pieces go back to front. Non-overlapping ones share a batch.
@@ -479,7 +507,9 @@ export default function levRender(reader, lgr) {
       const phase = texturePhase(qgrass, x, y, scale);
       pattern = qgrass.pattern(canv, phase.x, phase.y);
     }
-    if (pattern) canv.fillStyle = pattern;
+    if (pattern) {
+      canv.fillStyle = pattern;
+    }
 
     // what a piece covers, qgrass margin included, in Elma dimensions
     function box(p) {
@@ -497,14 +527,17 @@ export default function levRender(reader, lgr) {
     function overlapsBatch(b) {
       for (let i = 0; i < boxes.length; i++) {
         const o = boxes[i];
-        if (b.x1 < o.x2 && o.x1 < b.x2 && b.y1 < o.y2 && o.y1 < b.y2)
+        if (b.x1 < o.x2 && o.x1 < b.x2 && b.y1 < o.y2 && o.y1 < b.y2) {
           return true;
+        }
       }
       return false;
     }
 
     function flush() {
-      if (!batch.length) return;
+      if (!batch.length) {
+        return;
+      }
       if (pattern) {
         const outlines = new Path2D();
         batch.forEach(function(p) {
@@ -536,7 +569,9 @@ export default function levRender(reader, lgr) {
 
     pieces.forEach(function(p) {
       const b = box(p);
-      if (overlapsBatch(b)) flush();
+      if (overlapsBatch(b)) {
+        flush();
+      }
       batch.push(p);
       boxes.push(b);
     });
@@ -551,25 +586,36 @@ export default function levRender(reader, lgr) {
       lgrIdent = lgr._ident;
     }
 
-    var pics = [];
-    if (optPictures)
+    // pictures and grass share one distance buffer (canvas.cpp)
+    const items = [];
+    if (optPictures) {
       pictures.traverse(x, y, w, h, function(x, y, pic) {
-        pics.push(pic);
+        items.push({
+          pic: pic,
+          grass: false,
+          num: pic.num,
+          dist: pic.dist,
+          clipped: pic.clipping == "g"
+        });
       });
+    }
+    if (optGrass) {
+      items.push({
+        pic: null,
+        grass: true,
+        num: 0,
+        dist: GRASS_DISTANCE,
+        clipped: true
+      });
+    }
+    items.sort(byDepth);
 
-    // sky clipped pictures carry +DISTANCE_SKY_CLIPPING_CORRECTION, which puts
-    // them behind everything else
-    pics
-      .filter(function(pic) {
-        return pic.clipping == "s";
-      })
-      .sort(byDepth)
-      .forEach(function(pic) {
-        canv.save();
-        canv.translate(-x * scale, -y * scale);
-        drawPicture(pic, canv, scale, x, y, w, h);
-        canv.restore();
-      });
+    items.filter(isSkyClipped).forEach(function(item) {
+      canv.save();
+      canv.translate(-x * scale, -y * scale);
+      drawPicture(item.pic, canv, scale, x, y, w, h);
+      canv.restore();
+    });
 
     // clip isn't antialiased in Chromium—different with destination-out
     const ground = groundPath(x, y, w, h, scale);
@@ -579,13 +625,11 @@ export default function levRender(reader, lgr) {
     // and leaves a hairline along the ground.
     const target = clearLayer(w, h, scale);
 
-    void (function() {
-      // TODO: check that it's not accessing something it shouldn't
-      var img =
-        (optCustomBackgroundSky && lgr.picts[reader.ground()]) ||
-        lgr.picts.ground;
-      fillTexture(target, img, x, y, w, h, scale);
-    })();
+    // TODO: check that it's not accessing something it shouldn't
+    const groundImg =
+      (optCustomBackgroundSky && lgr.picts[reader.ground()]) ||
+      lgr.picts.ground;
+    fillTexture(target, groundImg, x, y, w, h, scale);
 
     function flushGround() {
       canv.save();
@@ -594,27 +638,21 @@ export default function levRender(reader, lgr) {
       canv.restore();
     }
 
-    // pictures and grass share one distance buffer (canvas.cpp)
-    const items = pics
-      .filter(function(pic) {
-        return pic.clipping != "s";
-      })
-      .map(function(pic) {
-        return { pic: pic, dist: pic.dist, clipped: pic.clipping == "g" };
-      });
-    if (optGrass)
-      items.push({ grass: true, dist: GRASS_DISTANCE, clipped: true });
-    items.sort(byDepth);
-
     let clipped = true;
     items.forEach(function(item) {
+      if (isSkyClipped(item)) {
+        return; // drawn behind the ground already
+      }
       if (item.clipped != clipped) {
-        if (clipped) flushGround();
-        else clearLayer(w, h, scale); // start a fresh clipped batch
+        if (clipped) {
+          flushGround();
+        } else {
+          clearLayer(w, h, scale); // start a fresh clipped batch
+        }
         clipped = item.clipped;
       }
       const dest = clipped ? target : canv;
-      if (!item.pic) {
+      if (item.grass) {
         drawGrass(dest, x, y, w, h, scale);
         return;
       }
@@ -623,7 +661,9 @@ export default function levRender(reader, lgr) {
       drawPicture(item.pic, dest, scale, x, y, w, h);
       dest.restore();
     });
-    if (clipped) flushGround();
+    if (clipped) {
+      flushGround();
+    }
 
     canv.strokeStyle = "#ff0000";
     if (window.dbg) {
