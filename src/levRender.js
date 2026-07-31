@@ -1,6 +1,8 @@
 import quadTree from "./util/quadTree";
 import geom from "./util/geom";
 
+// canvas.cpp, grass.cpp, sprite.cpp and lgr.cpp are elma-classic sources.
+
 function hypot(a, b) {
   return Math.sqrt(a * a + b * b);
 }
@@ -53,23 +55,66 @@ export default function levRender(reader, lgr) {
     });
   }
 
-  var minX = Infinity,
-    minY = Infinity;
-  var maxX = -Infinity,
-    maxY = -Infinity;
+  // level bounds, grass polygons excluded (segments.cpp)
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
 
   reader.polyReader(function(grass, count, vertices) {
     var poly = [];
     vertices(function(x, y) {
-      minX = Math.min(minX, x);
-      minY = Math.min(minY, y);
-      maxX = Math.max(maxX, x);
-      maxY = Math.max(maxY, y);
+      if (!grass) {
+        minX = Math.min(minX, x);
+        minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x);
+        maxY = Math.max(maxY, y);
+      }
       poly.push([x, y]);
     });
     if (grass) grassPolys.push(poly);
     else addPoly(poly, polyTree);
   });
+
+  // canvas.cpp: MARGIN_X, MARGIN_Y
+  const CANVAS_MARGIN_X = 10000 / 48;
+  const CANVAS_MARGIN_Y = 1000 / 48;
+
+  function mod(a, n) {
+    return (a % n + n) % n;
+  }
+
+  // canvas origin: level bounds plus a margin, snapped to pixel centres, y up
+  function textureAnchor(scale) {
+    if (!isFinite(minX) || !isFinite(maxY)) {
+      return { x: 0, y: 0 };
+    }
+    return {
+      x: Math.trunc((minX - CANVAS_MARGIN_X) * scale) + 0.5,
+      y: 1 - (Math.trunc((-maxY - CANVAS_MARGIN_Y) * scale) + 0.5)
+    };
+  }
+
+  // Where the texture's tiling starts, in viewport pixels
+  function texturePhase(img, x, y, scale) {
+    const anchor = textureAnchor(scale);
+    return {
+      x: -mod(Math.floor(Math.floor(x * scale) - anchor.x), img.width),
+      y: -mod(Math.floor(Math.floor(y * scale) - anchor.y), img.height)
+    };
+  }
+
+  // Tile img over the viewport, in the game's phase
+  function fillTexture(canv, img, x, y, w, h, scale) {
+    const phase = texturePhase(img, x, y, scale);
+    img.repeat(
+      canv,
+      Math.ceil(w * scale),
+      Math.ceil(h * scale),
+      phase.x,
+      phase.y
+    );
+  }
 
   var pictures = (function() {
     var tree;
@@ -112,6 +157,8 @@ export default function levRender(reader, lgr) {
   var grass = (function() {
     var tree;
     var maxImgW, maxImgH; // for overbounding in .traverse
+    let seq; // the game's draw order
+    const MAX_HEIGHTMAP_LENGTH = 10000; // canvas.cpp, at zoom 1
 
     // assuming w and h are positive
     function traverse(x, y, w, h, fn) {
@@ -121,107 +168,138 @@ export default function levRender(reader, lgr) {
     function calc() {
       tree = quadTree(1);
       maxImgW = maxImgH = 0;
+      seq = 0;
+
+      // the least an lgr needs for grass
+      if (lgr.grass.length < 2 || !lgr.picts.qgrass) {
+        return;
+      }
+      // and every heightmap, which lands when the image loads
+      if (!lgr.grass.every((pict) => pict.borders)) {
+        return;
+      }
 
       grassPolys.forEach(function(p) {
         calcGrassPoly(48, p);
       });
 
+      // heightmap of the grass line, one y per pixel column (grass.cpp)
+      function heightmapFor(scale, poly) {
+        let v1 = 0;
+        let widest = 0;
+        for (let i = 0; i < poly.length; i++) {
+          const j = (i + 1) % poly.length;
+          const length = Math.abs(poly[i][0] - poly[j][0]);
+          if (length > widest) {
+            v1 = i;
+            widest = length;
+          }
+        }
+        if (widest < 0.0001) {
+          return null;
+        }
+
+        let v2 = (v1 + 1) % poly.length;
+        const counterclockwise = !(poly[v1][0] < poly[v2][0]);
+
+        const heightmap = [];
+        let x0 = null;
+        let cur = null;
+        let done = false;
+
+        function addLine(a, b) {
+          const r1 = poly[a];
+          const r2 = poly[b];
+          if (r1[0] > r2[0]) {
+            return; // runs right to left
+          }
+
+          const x1 = Math.floor(r1[0] * scale);
+          const x2 = Math.floor(r2[0] * scale);
+          const y1 = r1[1] * scale;
+          const y2 = r2[1] * scale;
+
+          if (cur === null) {
+            x0 = x1;
+            cur = x1;
+            heightmap[0] = Math.floor(y1);
+          }
+          if (x1 >= x2) {
+            return;
+          }
+          // past the cap, or a gap the walk can't cross: the line ends here,
+          // and later edges can only start further right
+          if (x1 - x0 >= MAX_HEIGHTMAP_LENGTH || cur < x1 - 1) {
+            done = true;
+            return;
+          }
+
+          for (let x = x1; x <= x2; x++) {
+            if (x < cur) {
+              continue; // doubled back, keep what's there
+            }
+            if (x - x0 >= MAX_HEIGHTMAP_LENGTH) {
+              done = true;
+              return;
+            }
+            heightmap[x - x0] = Math.floor(
+              y1 + ((y2 - y1) * (x - x1)) / (x2 - x1)
+            );
+            cur = x;
+          }
+        }
+
+        for (let i = 0; i < poly.length - 1 && !done; i++) {
+          const step = counterclockwise ? 1 : poly.length - 1;
+          v1 = (v1 + step) % poly.length;
+          v2 = (v2 + step) % poly.length;
+          addLine(counterclockwise ? v1 : v2, counterclockwise ? v2 : v1);
+        }
+
+        if (x0 === null) {
+          return null;
+        }
+
+        return { x0: x0, heightmap: heightmap, length: cur - x0 + 1 };
+      }
+
       function calcGrassPoly(scale, poly) {
-        // the path selection is demonstrably wrong, but it probably works in all reasonable cases.
-        // it draws along the path from the left-most vertex to the right-most vertex that doesn't
-        //   include the widest edge.
-        // haven't figured out exactly what Elma itself does.
-        var minX = Infinity,
-          maxX = -Infinity,
-          minXi,
-          maxXi;
-        for (var z = 0; z < poly.length; z++) {
-          // WARNING: funny code
-          if (minX != (minX = Math.min(minX, poly[z][0]))) minXi = z;
-          if (maxX != (maxX = Math.max(maxX, poly[z][0]))) maxXi = z;
-        }
-        var maxW = 0;
-        for (var z = minXi; z % poly.length != maxXi; z++)
-          maxW = Math.max(
-            maxW,
-            Math.abs(poly[z % poly.length][0] - poly[(z + 1) % poly.length][0])
-          );
-        var dir = -1;
-        for (var z = poly.length + minXi; z % poly.length != maxXi; z--)
-          if (
-            maxW !=
-            (maxW = Math.max(
-              maxW,
-              Math.abs(
-                poly[z % poly.length][0] - poly[(z - 1) % poly.length][0]
-              )
-            ))
-          )
-            dir = 1;
-        function yAt(x) {
-          for (
-            var z = poly.length + minXi;
-            z % poly.length != maxXi;
-            z += dir
-          ) {
-            var from = poly[z % poly.length],
-              to = poly[(z + dir) % poly.length];
-            if (from[0] <= x && x < to[0]) {
-              var m = (to[1] - from[1]) / (to[0] - from[0]);
-              return m * (x - from[0]) + from[1];
-            }
-          }
+        const map = heightmapFor(scale, poly);
+        if (!map) {
+          return;
         }
 
-        var curX = poly[minXi][0] * scale,
-          curY = poly[minXi][1] * scale;
-        var gUps = lgr.grassUp,
-          gDowns = lgr.grassDown;
-        while (curX < maxX * scale) {
-          var bestD = Infinity,
-            bestA,
-            bestI;
-          for (var a = 0; a < gUps.length; a++) {
-            if (curX + gUps[a].width >= maxX * scale) continue;
-            var dist = Math.abs(
-              yAt((curX + gUps[a].width) / scale) * scale -
-                (curY - (gUps[a].height - 41))
-            );
-            if (dist < bestD) {
-              bestD = dist;
-              bestA = gUps;
-              bestI = a;
+        const end = map.x0 + map.length;
+        let x = map.x0;
+        let y = map.heightmap[0];
+
+        while (x < end) {
+          // pick the picture whose slope lands closest to the line ahead
+          let bestScore = Infinity;
+          let bestPict = null;
+          let bestFall = 0;
+          for (const pict of lgr.grass) {
+            const fall = (pict.height - 41) * (pict.isGrassUp() ? -1 : 1);
+            const target = x + pict.width;
+            const targetY =
+              target >= end
+                ? map.heightmap[map.length - 1]
+                : map.heightmap[target - map.x0];
+            const score = Math.abs(y + fall - targetY);
+            if (score < bestScore) {
+              bestScore = score;
+              bestPict = pict;
+              bestFall = fall;
             }
           }
-          for (var a = 0; a < gDowns.length; a++) {
-            if (curX + gDowns[a].width >= maxX * scale) continue;
-            var dist = Math.abs(
-              yAt((curX + gDowns[a].width) / scale) * scale -
-                (curY + (gDowns[a].height - 41))
-            );
-            if (dist < bestD) {
-              bestD = dist;
-              bestA = gDowns;
-              bestI = a;
-            }
-          }
-          if (!bestA) {
-            curX++;
-            continue;
-          }
-          var pict = bestA[bestI];
-          var fall = (pict.height - 41) * (bestA == gUps ? -1 : 1);
-          var fcx = Math.floor(curX),
-            fcy = Math.floor(curY + fall);
-          var fcyTop = Math.floor(curY) - Math.ceil((pict.height - fall) / 2);
 
-          maxImgW = Math.max(maxImgW, pict.width / scale);
-          maxImgH = Math.max(maxImgH, pict.height / scale);
+          const top = y - Math.ceil((bestPict.height - bestFall) / 2);
+          maxImgW = Math.max(maxImgW, bestPict.width / scale);
+          maxImgH = Math.max(maxImgH, bestPict.height / scale);
+          tree.add(x / scale, top / scale, { pict: bestPict, seq: seq++ });
 
-          tree.add(fcx / scale, fcyTop / scale, pict);
-
-          curX += pict.width;
-          curY += fall;
+          x += bestPict.width;
+          y += bestFall;
         }
       }
     }
@@ -235,53 +313,72 @@ export default function levRender(reader, lgr) {
     };
   })();
 
-  function drawPictures(pics, canv, scale, clipping, x, y, w, h) {
-    function draw(pic) {
-      // TODO: are masks specifically for textures? dunno
-      var img = lgr.picts[pic.picture];
-      if (pic.clipping != clipping) return;
-      if (img && img.draw) {
-        if (!geom.rectsOverlap(pic.x, pic.y, img.width, img.height, x, y, w, h))
-          return;
-        canv.save();
-        canv.translate(pic.x * scale, pic.y * scale);
-        canv.scale(scale / 48, scale / 48);
-        img.drawAt(canv);
-        canv.restore();
+  function drawPicture(pic, canv, scale, x, y, w, h) {
+    // a picture or a texture+mask pair, never both (sprite.cpp)
+    let img = lgr.picts[pic.picture];
+    if (img && img.draw) {
+      // image dimensions are in pixels, the viewport is in Elma units
+      if (
+        !geom.rectsOverlap(
+          pic.x,
+          pic.y,
+          img.width / 48,
+          img.height / 48,
+          x,
+          y,
+          w,
+          h
+        )
+      ) {
         return;
       }
-      img = lgr.picts[pic.texture];
-      var mask = lgr.picts[pic.mask];
-      if (img && img.draw && mask && mask.draw) {
-        if (
-          !geom.rectsOverlap(pic.x, pic.y, mask.width, mask.height, x, y, w, h)
-        )
-          return;
-        // TODO: scale textures, fix otherwise
-        var px = Math.round(pic.x * scale),
-          py = Math.round(pic.y * scale);
-        var offsX = px >= 0 ? px % img.width : img.width - -px % img.width;
-        var offsY = py >= 0 ? py % img.height : img.height - -py % img.height;
-        mask.getImage();
-        canv.save();
-        canv.translate(pic.x * scale, pic.y * scale);
-        canv.beginPath();
-        canv.moveTo(0, 0);
-        canv.lineTo(mask.width * scale / 48, 0);
-        canv.lineTo(mask.width * scale / 48, mask.height * scale / 48);
-        canv.lineTo(0, mask.height * scale / 48);
-        canv.clip();
-        canv.translate(-offsX, -offsY);
-        img.repeat(
-          canv,
-          offsX + mask.width * scale / 48,
-          offsY + mask.height * scale / 48
-        );
-        canv.restore();
-      }
+      const left = Math.round(pic.x * scale);
+      const top = Math.round(pic.y * scale);
+      img.drawRect(
+        canv,
+        left,
+        top,
+        Math.round((pic.x + img.width / 48) * scale) - left,
+        Math.round((pic.y + img.height / 48) * scale) - top
+      );
+      return;
     }
-
-    pics.forEach(draw);
+    img = lgr.picts[pic.texture];
+    const mask = lgr.picts[pic.mask];
+    if (img && img.draw && mask && mask.draw) {
+      if (
+        !geom.rectsOverlap(
+          pic.x,
+          pic.y,
+          mask.width / 48,
+          mask.height / 48,
+          x,
+          y,
+          w,
+          h
+        )
+      ) {
+        return;
+      }
+      // The texture tiles from the canvas origin rather than from this
+      // picture's own corner, so masked pictures that sit next to each other
+      // line up on one continuous pattern. Unlike the game, it tiles at its
+      // native size no matter the zoom (lgr.cpp: texture_zoom).
+      const anchor = textureAnchor(scale);
+      const offsX = mod(Math.floor(pic.x * scale - anchor.x), img.width);
+      const offsY = mod(Math.floor(pic.y * scale - anchor.y), img.height);
+      mask.getImage();
+      canv.save();
+      canv.translate(pic.x * scale, pic.y * scale);
+      img.repeat(
+        canv,
+        mask.width * scale / 48,
+        mask.height * scale / 48,
+        -offsX,
+        -offsY
+      );
+      canv.restore();
+    }
   }
 
   var lgrIdent = {};
@@ -289,6 +386,197 @@ export default function levRender(reader, lgr) {
   var optGrass = true;
   var optPictures = true;
   var optCustomBackgroundSky = true;
+
+  const GRASS_DISTANCE = 600; // canvas.cpp
+
+  // tie order: ground clipped, grass, sky clipped, unclipped (canvas.cpp)
+  function tiePriority(item) {
+    if (item.grass) {
+      return 1;
+    }
+    if (item.pic.clipping == "g") {
+      return 0;
+    }
+    if (item.pic.clipping == "s") {
+      return 2;
+    }
+    return 3;
+  }
+
+  // Paint order: furthest first, so whatever the game would keep ends up last
+  function byDepth(a, b) {
+    return b.dist - a.dist || tiePriority(b) - tiePriority(a) || b.num - a.num;
+  }
+
+  // sky clipped pictures carry +DISTANCE_SKY_CLIPPING_CORRECTION, which puts
+  // them behind everything else
+  function isSkyClipped(item) {
+    return !item.grass && item.pic.clipping == "s";
+  }
+
+  // every polygon, in Elma dimensions
+  let polyPath = null;
+
+  // scratch layer for ground clipped drawing, reused across tiles
+  let layerCanvas = null;
+  function clearLayer(w, h, scale) {
+    const pw = Math.ceil(w * scale);
+    const ph = Math.ceil(h * scale);
+    if (!layerCanvas) {
+      layerCanvas = document.createElement("canvas");
+    }
+    if (layerCanvas.width != pw || layerCanvas.height != ph) {
+      layerCanvas.width = pw;
+      layerCanvas.height = ph;
+    }
+    const ctx = layerCanvas.getContext("2d");
+    ctx.clearRect(0, 0, pw, ph);
+    return ctx;
+  }
+
+  // the region ground clipped drawing is confined to, in viewport coordinates
+  function groundPath(x, y, w, h, scale) {
+    if (!polyPath) {
+      polyPath = new Path2D();
+      traverse(polyTree, false, function(isSolid, verts) {
+        polyPath.moveTo(
+          verts[verts.length - 1][0],
+          verts[verts.length - 1][1]
+        );
+        for (let z = verts.length - 2; z >= 0; z--)
+          polyPath.lineTo(verts[z][0], verts[z][1]);
+      });
+    }
+
+    const path = new Path2D();
+    path.moveTo(0, 0);
+    path.lineTo(w * scale, 0);
+    path.lineTo(w * scale, h * scale);
+    path.lineTo(0, h * scale);
+    path.addPath(
+      polyPath,
+      new DOMMatrix([scale, 0, 0, scale, -x * scale, -y * scale])
+    );
+
+    return path;
+  }
+
+  // outline a piece's qgrass fills, in picture pixels; keyed on the borders the
+  // path was built from, which change when the image finishes loading
+  const outlineCache = new WeakMap();
+  function grassOutline(pict) {
+    let cached = outlineCache.get(pict);
+    if (!cached || cached.borders !== pict.borders) {
+      const b = pict.borders;
+      const path = new Path2D();
+      // QGRASS_MARGIN - QUPDOWN_MARGIN rows of qgrass above the picture
+      path.moveTo(0, -20);
+      for (let z = 0; z < b.length; z++) {
+        path.lineTo(z, b[z] + 1);
+        path.lineTo(z + 1, b[z] + 1);
+      }
+      path.lineTo(pict.width, -20);
+      path.closePath();
+      cached = { borders: b, path: path };
+      outlineCache.set(pict, cached);
+    }
+    return cached.path;
+  }
+
+  // draws into the ground clipped layer
+  function drawGrass(canv, x, y, w, h, scale) {
+    const pieces = [];
+    grass.traverse(x, y, w, h + 24, function(grassX, grassY, piece) {
+      pieces.push({ x: grassX, y: grassY, piece: piece });
+    });
+    if (!pieces.length) {
+      return;
+    }
+
+    // Grass is all at one distance, where the game keeps the first thing
+    // drawn, so pieces go back to front. Non-overlapping ones share a batch.
+    pieces.sort(function(a, b) {
+      return b.piece.seq - a.piece.seq;
+    });
+
+    const s = scale / 48;
+    const qgrass = lgr.picts.qgrass;
+    // null until qgrass is there and loaded; the pieces still get drawn
+    let pattern = null;
+    if (qgrass) {
+      const phase = texturePhase(qgrass, x, y, scale);
+      pattern = qgrass.pattern(canv, phase.x, phase.y);
+    }
+    if (pattern) {
+      canv.fillStyle = pattern;
+    }
+
+    // what a piece covers, qgrass margin included, in Elma dimensions
+    function box(p) {
+      return {
+        x1: p.x,
+        x2: p.x + p.piece.pict.width / 48,
+        y1: p.y - 20 / 48,
+        y2: p.y + p.piece.pict.height / 48
+      };
+    }
+
+    let batch = [];
+    let boxes = [];
+
+    function overlapsBatch(b) {
+      for (let i = 0; i < boxes.length; i++) {
+        const o = boxes[i];
+        if (b.x1 < o.x2 && o.x1 < b.x2 && b.y1 < o.y2 && o.y1 < b.y2) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    function flush() {
+      if (!batch.length) {
+        return;
+      }
+      if (pattern) {
+        const outlines = new Path2D();
+        batch.forEach(function(p) {
+          // half a pixel of overlap; a shared edge leaves a hairline
+          const sx = s + 0.5 / p.piece.pict.width;
+          outlines.addPath(
+            grassOutline(p.piece.pict),
+            new DOMMatrix([sx, 0, 0, s, (p.x - x) * scale, (p.y - y) * scale])
+          );
+        });
+        canv.fill(outlines);
+      }
+      batch.forEach(function(p) {
+        // whole pixels; fractional edges leave a seam
+        const pict = p.piece.pict;
+        const left = Math.round((p.x - x) * scale);
+        const top = Math.round((p.y - y) * scale);
+        pict.drawRect(
+          canv,
+          left,
+          top,
+          Math.round((p.x - x + pict.width / 48) * scale) - left,
+          Math.round((p.y - y + pict.height / 48) * scale) - top
+        );
+      });
+      batch = [];
+      boxes = [];
+    }
+
+    pieces.forEach(function(p) {
+      const b = box(p);
+      if (overlapsBatch(b)) {
+        flush();
+      }
+      batch.push(p);
+      boxes.push(b);
+    });
+    flush();
+  }
 
   // (x, y)–(x + w, y + h): viewport in Elma dimensions
   function draw(canv, x, y, w, h, scale) {
@@ -298,121 +586,83 @@ export default function levRender(reader, lgr) {
       lgrIdent = lgr._ident;
     }
 
-    var pics = [];
-    pictures.traverse(x, y, w, h, function(x, y, pic) {
-      pics.push(pic);
-    });
-    pics.sort(function(a, b) {
-      return (
-        (a.dist < b.dist) - (a.dist > b.dist) ||
-        (a.num < b.num) - (a.num > b.num)
-      );
-    });
-
+    // pictures and grass share one distance buffer (canvas.cpp)
+    const items = [];
     if (optPictures) {
-      canv.save();
-      canv.translate(-x * scale, -y * scale);
-      drawPictures(pics, canv, scale, "s", x, y, w, h); // sky
-      canv.restore();
+      pictures.traverse(x, y, w, h, function(x, y, pic) {
+        items.push({
+          pic: pic,
+          grass: false,
+          num: pic.num,
+          dist: pic.dist,
+          clipped: pic.clipping == "g"
+        });
+      });
     }
-
-    canv.save();
-    canv.beginPath();
-    canv.moveTo(0, 0);
-    canv.lineTo(w * scale, 0);
-    canv.lineTo(w * scale, h * scale);
-    canv.lineTo(0, h * scale);
-
-    canv.translate(-x * scale, -y * scale);
-
-    traverse(polyTree, false, function(isSolid, verts) {
-      canv.moveTo(
-        scale * verts[verts.length - 1][0],
-        scale * verts[verts.length - 1][1]
-      );
-      for (var z = verts.length - 2; z >= 0; z--)
-        canv.lineTo(scale * verts[z][0], scale * verts[z][1]);
-    });
-
-    canv.translate(x * scale, y * scale);
-    canv.clip(); // clip isn't antialiased in Chromium—different with destination-out
-    void (function() {
-      // TODO: check that it's not accessing something it shouldn't
-      var img =
-        (optCustomBackgroundSky && lgr.picts[reader.ground()]) ||
-        lgr.picts.ground;
-      var px = Math.floor(x * scale),
-        py = Math.floor(y * scale);
-      var pw = Math.floor(w * scale),
-        ph = Math.floor(h * scale);
-      var offsX = x >= 0 ? px % img.width : img.width - -px % img.width;
-      var offsY = y >= 0 ? py % img.height : img.height - -py % img.height;
-      canv.save();
-      canv.translate(-img.width - offsX, -img.height - offsY);
-      img.repeat(canv, pw + img.width * 2, ph + img.height * 2);
-      canv.restore();
-    })();
-
-    if (optPictures) {
-      canv.save();
-      canv.translate(-x * scale, -y * scale);
-      drawPictures(pics, canv, scale, "g", x, y, w, h); // ground
-      canv.restore();
-    }
-
-    canv.translate(-x * scale, -y * scale);
-
     if (optGrass) {
-      canv.save();
-      canv.beginPath();
-      grass.traverse(x, y, w, h + 24, function(grassX, grassY, pict) {
-        canv.save();
-        canv.translate(grassX * scale, grassY * scale);
-        var b = pict.borders;
-        canv.scale(scale / 48, scale / 48);
-        canv.moveTo(0, -24);
-        for (var z = 0; z < b.length; z++) {
-          canv.lineTo(z, b[z] + 1);
-          canv.lineTo(z + 1, b[z] + 1);
-        }
-        canv.lineTo(pict.width, -24);
-        canv.closePath();
-        canv.restore();
-      });
-      canv.clip();
-
-      canv.translate(x * scale, y * scale);
-
-      void (function() {
-        var img = lgr.picts.qgrass;
-        var px = Math.floor(x * scale),
-          py = Math.floor(y * scale);
-        var pw = Math.floor(w * scale),
-          ph = Math.floor(h * scale);
-        var offsX = x >= 0 ? px % img.width : img.width - -px % img.width;
-        var offsY = y >= 0 ? py % img.height : img.height - -py % img.height;
-        canv.save();
-        canv.translate(-img.width - offsX, -img.height - offsY);
-        img.repeat(canv, pw + img.width * 2, ph + img.height * 2);
-        canv.restore();
-      })();
-      canv.restore();
-
-      grass.traverse(x, y, w, h, function(grassX, grassY, pict) {
-        canv.save();
-        canv.translate(grassX * scale, grassY * scale);
-        canv.scale(scale / 48, scale / 48);
-        pict.drawAt(canv);
-        canv.restore();
+      items.push({
+        pic: null,
+        grass: true,
+        num: 0,
+        dist: GRASS_DISTANCE,
+        clipped: true
       });
     }
-    canv.restore();
+    items.sort(byDepth);
 
-    if (optPictures) {
+    items.filter(isSkyClipped).forEach(function(item) {
       canv.save();
       canv.translate(-x * scale, -y * scale);
-      drawPictures(pics, canv, scale, "u", x, y, w, h); // unclipped
+      drawPicture(item.pic, canv, scale, x, y, w, h);
       canv.restore();
+    });
+
+    // clip isn't antialiased in Chromium—different with destination-out
+    const ground = groundPath(x, y, w, h, scale);
+
+    // Ground clipped drawing collects in a layer and is clipped once on the way
+    // out; clipping each thing separately antialiases the same edge repeatedly
+    // and leaves a hairline along the ground.
+    const target = clearLayer(w, h, scale);
+
+    // TODO: check that it's not accessing something it shouldn't
+    const groundImg =
+      (optCustomBackgroundSky && lgr.picts[reader.ground()]) ||
+      lgr.picts.ground;
+    fillTexture(target, groundImg, x, y, w, h, scale);
+
+    function flushGround() {
+      canv.save();
+      canv.clip(ground);
+      canv.drawImage(target.canvas, 0, 0);
+      canv.restore();
+    }
+
+    let clipped = true;
+    items.forEach(function(item) {
+      if (isSkyClipped(item)) {
+        return; // drawn behind the ground already
+      }
+      if (item.clipped != clipped) {
+        if (clipped) {
+          flushGround();
+        } else {
+          clearLayer(w, h, scale); // start a fresh clipped batch
+        }
+        clipped = item.clipped;
+      }
+      const dest = clipped ? target : canv;
+      if (item.grass) {
+        drawGrass(dest, x, y, w, h, scale);
+        return;
+      }
+      dest.save();
+      dest.translate(-x * scale, -y * scale);
+      drawPicture(item.pic, dest, scale, x, y, w, h);
+      dest.restore();
+    });
+    if (clipped) {
+      flushGround();
     }
 
     canv.strokeStyle = "#ff0000";
@@ -437,6 +687,7 @@ export default function levRender(reader, lgr) {
     var canvs = [];
     var cacheLgrIdent;
     var cacheOptIdent;
+    let lastScale;
 
     function update(which, canv) {
       var x = which % num,
@@ -461,6 +712,40 @@ export default function levRender(reader, lgr) {
       h = Math.ceil(h * scale);
       x = Math.floor(x * scale);
       y = Math.floor(y * scale);
+
+      // Tiles cover 4/3 of the viewport, more than a zoom step needs, so
+      // stretch them and re-render once the scale settles.
+      if (canvs.length && !invalid() && scale != cscale && scale != lastScale) {
+        const f = scale / cscale;
+        const covers =
+          xp * f <= x &&
+          yp * f <= y &&
+          (xp + num * wp) * f >= x + w &&
+          (yp + num * hp) * f >= y + h;
+        lastScale = scale;
+        if (covers) {
+          // edges rounded so that neighbouring tiles still share one, rather
+          // than each landing on a fraction of a pixel and leaving a seam
+          const edgeX = [];
+          const edgeY = [];
+          for (let i = 0; i <= num; i++) {
+            edgeX.push(Math.round((xp + i * wp) * f) - x);
+            edgeY.push(Math.round((yp + i * hp) * f) - y);
+          }
+          for (let xi = 0; xi < num; xi++)
+            for (let yi = 0; yi < num; yi++)
+              canv.drawImage(
+                canvs[yi * num + xi],
+                edgeX[xi],
+                edgeY[yi],
+                edgeX[xi + 1] - edgeX[xi],
+                edgeY[yi + 1] - edgeY[yi]
+              );
+          return;
+        }
+      }
+      lastScale = scale;
+
       if (
         invalid() ||
         scale != cscale ||
@@ -547,14 +832,15 @@ export default function levRender(reader, lgr) {
       // TODO: check that it's not accessing something it shouldn't
       var img =
         (optCustomBackgroundSky && lgr.picts[reader.sky()]) || lgr.picts.sky;
-      x = Math.floor(x * scale / 3);
+      const anchor = textureAnchor(scale);
       w *= scale;
       h *= scale;
-      if ((x = x % img.width) < 0) x = img.width + x;
-      canv.save();
-      canv.translate(-x, 0);
-      img.repeat(canv, w + img.width, h);
-      canv.restore();
+      // parallax halves the canvas position (canvas.cpp: PARALLAX = 2), and the
+      // sky is screen locked vertically, anchored at its bottom edge
+      const viewLeft = Math.floor(x * scale - anchor.x);
+      const offsX = mod(Math.trunc(viewLeft / 2), img.width);
+      const offsY = mod(-Math.floor(h), img.height);
+      img.repeat(canv, Math.ceil(w), Math.ceil(h), -offsX, -offsY);
     },
     bounds: function() {
       return { minX, minY, maxX, maxY };
