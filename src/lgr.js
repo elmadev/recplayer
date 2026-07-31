@@ -85,6 +85,7 @@ class LGRImage {
     this.borders = null;
     this.width = null;
     this.height = null;
+    this.patterns = new WeakMap();
   }
 
   loadImage() {
@@ -103,19 +104,10 @@ class LGRImage {
   }
 
   imageLoaded() {
-    this.updateGrass();
+    if (this.isGrassUp() || this.isGrassDown()) {
+      this.calculateHeightmap();
+    }
     this.lgr.updated();
-  }
-
-  updateGrass() {
-    if (this.isGrassUp()) {
-      this.lgr.grassUp.push(this);
-      this.calculateHeightmap();
-    }
-    if (this.isGrassDown()) {
-      this.lgr.grassDown.push(this);
-      this.calculateHeightmap();
-    }
   }
 
   calculateHeightmap() {
@@ -215,14 +207,30 @@ class LGRImage {
     }
   }
 
-  repeat(canv, w, h) {
+  // the texture as a fill style, offset by (offsX, offsY); null until loaded
+  pattern(canv, offsX, offsY) {
     const image = this.getImage();
-    if (image) {
-      canv.fillStyle = canv.createPattern(image, "repeat");
-      canv.fillRect(0, 0, w, h);
-    } else {
-      this.constructor.placeholder_texture(canv, w, h);
+    if (!image) {
+      return null;
     }
+    let pattern = this.patterns.get(canv);
+    if (!pattern) {
+      pattern = canv.createPattern(image, "repeat");
+      this.patterns.set(canv, pattern);
+    }
+    pattern.setTransform(new DOMMatrix([1, 0, 0, 1, offsX || 0, offsY || 0]));
+    return pattern;
+  }
+
+  // fills (0, 0)-(w, h)
+  repeat(canv, w, h, offsX, offsY) {
+    const pattern = this.pattern(canv, offsX, offsY);
+    if (!pattern) {
+      this.constructor.placeholder_texture(canv, w, h);
+      return;
+    }
+    canv.fillStyle = pattern;
+    canv.fillRect(0, 0, w, h);
   }
 
   static arrow(gravity) {
@@ -333,8 +341,8 @@ export class LGRWrapper {
     this._ident = {};
     this.playerInvalidate = function () {}; // callback function for player.js
     this.picts = {};
-    this.grassUp = [];
-    this.grassDown = [];
+    // in lgr order, so tiebreaks match the game's
+    this.grass = [];
 
     if (!lgrFile) {
       this.legacy_loadLgr(legacy_path);
@@ -391,6 +399,7 @@ export class LGRWrapper {
   _addImage(name, image) {
     this.picts[name] = image;
     if (image.isGrassUp() || image.isGrassDown()) {
+      this.grass.push(image);
       image.getImage();
     }
     return image;
