@@ -300,7 +300,19 @@ export default function levRender(reader, lgr) {
     // a picture or a texture+mask pair, never both (sprite.cpp)
     let img = lgr.picts[pic.picture];
     if (img && img.draw) {
-      if (!geom.rectsOverlap(pic.x, pic.y, img.width, img.height, x, y, w, h))
+      // image dimensions are in pixels, the viewport is in Elma units
+      if (
+        !geom.rectsOverlap(
+          pic.x,
+          pic.y,
+          img.width / 48,
+          img.height / 48,
+          x,
+          y,
+          w,
+          h
+        )
+      )
         return;
       canv.save();
       canv.translate(pic.x * scale, pic.y * scale);
@@ -312,7 +324,18 @@ export default function levRender(reader, lgr) {
     img = lgr.picts[pic.texture];
     const mask = lgr.picts[pic.mask];
     if (img && img.draw && mask && mask.draw) {
-      if (!geom.rectsOverlap(pic.x, pic.y, mask.width, mask.height, x, y, w, h))
+      if (
+        !geom.rectsOverlap(
+          pic.x,
+          pic.y,
+          mask.width / 48,
+          mask.height / 48,
+          x,
+          y,
+          w,
+          h
+        )
+      )
         return;
       // The texture tiles from the canvas origin rather than from this
       // picture's own corner, so masked pictures that sit next to each other
@@ -361,22 +384,32 @@ export default function levRender(reader, lgr) {
     );
   }
 
+  // every polygon, in Elma dimensions
+  let polyPath = null;
+
   // the region ground clipped drawing is confined to, in viewport coordinates
   function groundPath(x, y, w, h, scale) {
+    if (!polyPath) {
+      polyPath = new Path2D();
+      traverse(polyTree, false, function(isSolid, verts) {
+        polyPath.moveTo(
+          verts[verts.length - 1][0],
+          verts[verts.length - 1][1]
+        );
+        for (let z = verts.length - 2; z >= 0; z--)
+          polyPath.lineTo(verts[z][0], verts[z][1]);
+      });
+    }
+
     const path = new Path2D();
     path.moveTo(0, 0);
     path.lineTo(w * scale, 0);
     path.lineTo(w * scale, h * scale);
     path.lineTo(0, h * scale);
-
-    traverse(polyTree, false, function(isSolid, verts) {
-      path.moveTo(
-        scale * (verts[verts.length - 1][0] - x),
-        scale * (verts[verts.length - 1][1] - y)
-      );
-      for (let z = verts.length - 2; z >= 0; z--)
-        path.lineTo(scale * (verts[z][0] - x), scale * (verts[z][1] - y));
-    });
+    path.addPath(
+      polyPath,
+      new DOMMatrix([scale, 0, 0, scale, -x * scale, -y * scale])
+    );
 
     return path;
   }
@@ -528,6 +561,7 @@ export default function levRender(reader, lgr) {
     var canvs = [];
     var cacheLgrIdent;
     var cacheOptIdent;
+    let lastScale;
 
     function update(which, canv) {
       var x = which % num,
@@ -552,6 +586,32 @@ export default function levRender(reader, lgr) {
       h = Math.ceil(h * scale);
       x = Math.floor(x * scale);
       y = Math.floor(y * scale);
+
+      // Tiles cover 4/3 of the viewport, more than a zoom step needs, so
+      // stretch them and re-render once the scale settles.
+      if (canvs.length && !invalid() && scale != cscale && scale != lastScale) {
+        const f = scale / cscale;
+        const covers =
+          xp * f <= x &&
+          yp * f <= y &&
+          (xp + num * wp) * f >= x + w &&
+          (yp + num * hp) * f >= y + h;
+        lastScale = scale;
+        if (covers) {
+          for (let xi = 0; xi < num; xi++)
+            for (let yi = 0; yi < num; yi++)
+              canv.drawImage(
+                canvs[yi * num + xi],
+                (xp + xi * wp) * f - x,
+                (yp + yi * hp) * f - y,
+                wp * f,
+                hp * f
+              );
+          return;
+        }
+      }
+      lastScale = scale;
+
       if (
         invalid() ||
         scale != cscale ||
